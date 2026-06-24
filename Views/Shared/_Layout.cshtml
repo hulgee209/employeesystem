@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+
+<html lang="mn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>@ViewData["Title"] - Ажилтны удирдлагын систем</title>
+
+    <link rel="stylesheet"
+          href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <link rel="stylesheet"
+          href="https://cdn3.devexpress.com/jslib/25.2.7/css/dx.light.css" />
+
+    <link rel="stylesheet"
+          href="~/css/site.css"
+          asp-append-version="true" />
+
+    <link rel="stylesheet"
+          href="~/EmployeeSystem.styles.css"
+          asp-append-version="true" />
+
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                 script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn3.devexpress.com https://cdn.jsdelivr.net;
+                 style-src 'self' 'unsafe-inline' https://cdn3.devexpress.com;
+                 connect-src 'self' https: blob:;
+                 img-src 'self' data:;
+                 font-src 'self' https://cdn3.devexpress.com https://cdn.jsdelivr.net;
+                 worker-src 'self' https://cdn3.devexpress.com;
+                 object-src 'none';
+                 base-uri 'self';
+                 frame-ancestors 'none';" />
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/25.2.7/js/dx.all.js"></script>
+    <script src="https://cdn3.devexpress.com/jslib/25.2.7/js/dx.aspnet.mvc.js"></script>
+</head>
+
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold"
+           asp-controller="Dashboard"
+           asp-action="Index">
+            Ажилтны удирдлагын систем
+        </a>
+
+        <button class="navbar-toggler"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#navbarContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+
+        <div class="collapse navbar-collapse"
+             id="navbarContent">
+            @if (User.Identity?.IsAuthenticated == true)
+            {
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="Dashboard"
+                           asp-action="Index">
+                            Хяналтын самбар
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="Employees"
+                           asp-action="Index">
+                            Ажилтан 360
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="Attendance"
+                           asp-action="Index">
+                            Ирц
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="Payroll"
+                           asp-action="Index">
+                            Цалин
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="Performance"
+                           asp-action="Index">
+                            Гүйцэтгэл
+                        </a>
+                    </li>
+
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               asp-controller="Users"
+                               asp-action="Index">
+                                Хэрэглэгчид
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               asp-controller="Roles"
+                               asp-action="Index">
+                                Эрхүүд
+                            </a>
+                        </li>
+                    }
+
+                    <li class="nav-item">
+                        <a class="nav-link"
+                           asp-controller="AIChat"
+                           asp-action="Index">
+                            AI HR туслах
+                        </a>
+                    </li>
+                </ul>
+
+                <div class="d-flex align-items-center gap-3">
+                    <span class="navbar-text text-light">
+                        @User.Identity.Name
+                    </span>
+                    <form asp-controller="Account"
+                          asp-action="Logout"
+                          method="post"
+                          class="m-0">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="btn btn-outline-light btn-sm">
+                            Гарах
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    @RenderBody()
+</div>
+
+@if (User.Identity?.IsAuthenticated == true)
+{
+    @await Html.PartialAsync("_AIChatWidget")
+}
+
+<footer class="border-top text-muted mt-5">
+    <div class="container py-3">
+        Ажилтны удирдлагын систем &copy; 2026
+    </div>
+</footer>
+
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js"
+        asp-append-version="true"></script>
+
+@await RenderSectionAsync("Scripts", required: false)
+
+</body>
+</html>

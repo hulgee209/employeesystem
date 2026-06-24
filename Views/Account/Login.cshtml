@@ -1,0 +1,100 @@
+@model EmployeeSystem.Models.LoginViewModel
+
+@{
+    ViewData["Title"] = "Нэвтрэх";
+}
+
+<div class="auth-page">
+    <div class="auth-card">
+        <h2>Нэвтрэх</h2>
+        <p>Ажилтны удирдлагын системд эрхээрээ нэвтэрнэ үү.</p>
+
+        <form asp-action="Login" method="post" autocomplete="on">
+            @Html.AntiForgeryToken()
+            <input asp-for="ReturnUrl" type="hidden" />
+
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+            <div class="mb-3">
+                <label asp-for="Username" class="form-label">Нэвтрэх нэр</label>
+                <input asp-for="Username" class="form-control" autocomplete="username" autofocus />
+                <span asp-validation-for="Username" class="text-danger"></span>
+            </div>
+
+            <div class="mb-3">
+                <label asp-for="Password" class="form-label">Нууц үг</label>
+                <input asp-for="Password" class="form-control" autocomplete="current-password" />
+                <span asp-validation-for="Password" class="text-danger"></span>
+            </div>
+
+            <div class="form-check mb-3">
+                <input asp-for="RememberMe" class="form-check-input" />
+                <label asp-for="RememberMe" class="form-check-label">Намайг сана</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+                Нэвтрэх
+            </button>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        (function () {
+            const username = document.getElementById('Username');
+            const password = document.getElementById('Password');
+            const remember = document.getElementById('RememberMe');
+            const form = username ? username.closest('form') : null;
+            const key = 'employeeSystem.rememberedUsername';
+            const autoLoginKey = 'employeeSystem.autoLoginAttempted';
+
+            if (!username || !password || !remember || !form) return;
+
+            const savedUsername = localStorage.getItem(key);
+            if (!username.value && savedUsername) {
+                username.value = savedUsername;
+                remember.checked = true;
+            }
+
+            form.addEventListener('submit', function () {
+                if (remember.checked && username.value.trim()) {
+                    localStorage.setItem(key, username.value.trim());
+                } else {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            [username, password, remember].forEach(function (element) {
+                element.addEventListener('input', function () {
+                    sessionStorage.removeItem(autoLoginKey);
+                });
+                element.addEventListener('change', function () {
+                    sessionStorage.removeItem(autoLoginKey);
+                });
+            });
+
+            let autofillChecks = 0;
+            const autofillTimer = window.setInterval(function () {
+                autofillChecks += 1;
+                const alreadyTried = sessionStorage.getItem(autoLoginKey) === 'true';
+                const canAutoSubmit =
+                    remember.checked &&
+                    username.value.trim().length > 0 &&
+                    password.value.length > 0 &&
+                    !alreadyTried;
+
+                if (canAutoSubmit) {
+                    window.clearInterval(autofillTimer);
+                    sessionStorage.setItem(autoLoginKey, 'true');
+                    form.requestSubmit();
+                }
+
+                if (autofillChecks >= 8 || alreadyTried) {
+                    window.clearInterval(autofillTimer);
+                }
+            }, 400);
+        })();
+    </script>
+}

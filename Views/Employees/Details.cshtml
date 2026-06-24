@@ -1,0 +1,114 @@
+@model EmployeeSystem.Models.Employee360DetailsViewModel
+
+@{
+    ViewData["Title"] = "Ажилтан 360";
+
+    string RiskClass(int value, bool inverse = false)
+    {
+        var score = inverse ? 100 - value : value;
+        return score < 35 ? "success" : score < 70 ? "warning" : "danger";
+    }
+}
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">@Model.FullName</h2>
+        <p class="text-muted mb-0">@Model.DepartmentName · @Model.PositionName · Ажилтан 360 дэлгэрэнгүй</p>
+    </div>
+    <a asp-action="Index" class="btn btn-outline-secondary">Буцах</a>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Ирцийн эрсдэлийн оноо</span>
+                <strong class="text-@RiskClass(Model.Scores.AttendanceRiskScore)">@Model.Scores.AttendanceRiskScore</strong>
+                <small>@Model.Scores.AttendanceForecast</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Гүйцэтгэлийн эрсдэлийн оноо</span>
+                <strong class="text-@RiskClass(Model.Scores.PerformanceRiskScore)">@Model.Scores.PerformanceRiskScore</strong>
+                <small>@Model.Scores.PerformanceForecast</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Ажилтны ерөнхий оноо</span>
+                <strong class="text-@RiskClass(Model.Scores.EmployeeHealthScore, true)">@Model.Scores.EmployeeHealthScore</strong>
+                <small>Ирц, гүйцэтгэл, чөлөөний хэв маягийн нийлмэл оноо</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs employee-360-tabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#profile" type="button">Профайл</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#attendance" type="button">Ирц</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#payroll" type="button">Цалин</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#performance" type="button">Гүйцэтгэл</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#leave" type="button">Чөлөө</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#projects" type="button">Төсөл</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#training" type="button">Сургалт</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#assets" type="button">Хөрөнгө</button></li>
+</ul>
+
+<div class="tab-content bg-white border border-top-0 p-4 employee-360-content">
+    <div id="profile" class="tab-pane fade show active">
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Ажилтны дугаар</dt><dd class="col-sm-8">@Model.EmployeeId</dd>
+                    <dt class="col-sm-4">Нэр</dt><dd class="col-sm-8">@Model.FullName</dd>
+                    <dt class="col-sm-4">Хэлтэс</dt><dd class="col-sm-8">@Model.DepartmentName</dd>
+                    <dt class="col-sm-4">Албан тушаал</dt><dd class="col-sm-8">@Model.PositionName</dd>
+                    <dt class="col-sm-4">Утас</dt><dd class="col-sm-8">@(Model.Phone ?? "-")</dd>
+                    <dt class="col-sm-4">Имэйл</dt><dd class="col-sm-8">@(Model.Email ?? "-")</dd>
+                    <dt class="col-sm-4">Ажилд орсон</dt><dd class="col-sm-8">@(Model.HireDate?.ToString("yyyy-MM-dd") ?? "-")</dd>
+                </dl>
+            </div>
+            <div class="col-lg-6">
+                <div class="row g-3">
+                    <div class="col-sm-6"><div class="card metric-card"><div class="card-body"><span class="metric-label">Дэвших боломж</span><strong>@Model.Scores.PromotionCandidateScore</strong></div></div></div>
+                    <div class="col-sm-6"><div class="card metric-card"><div class="card-body"><span class="metric-label">Тогтоон барих эрсдэл</span><strong>@Model.Scores.RetentionRiskScore</strong></div></div></div>
+                    <div class="col-sm-6"><div class="card metric-card"><div class="card-body"><span class="metric-label">Сургалтын санал</span><strong>@Model.Scores.TrainingRecommendationScore</strong></div></div></div>
+                    <div class="col-sm-6"><div class="card metric-card"><div class="card-body"><span class="metric-label">Ерөнхий оноо</span><strong>@Model.Scores.EmployeeHealthScore</strong></div></div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="attendance" class="tab-pane fade">
+        @await Html.PartialAsync("_SimpleAttendanceTable", Model.Attendance)
+    </div>
+
+    <div id="payroll" class="tab-pane fade">
+        @await Html.PartialAsync("_SimplePayrollTable", Model.Payroll)
+    </div>
+
+    <div id="performance" class="tab-pane fade">
+        @await Html.PartialAsync("_SimplePerformanceTable", Model.Performance)
+    </div>
+
+    <div id="leave" class="tab-pane fade">
+        @await Html.PartialAsync("_SimpleItemsTable", Model.Leave)
+    </div>
+
+    <div id="projects" class="tab-pane fade">
+        @await Html.PartialAsync("_SimpleItemsTable", Model.Projects)
+    </div>
+
+    <div id="training" class="tab-pane fade">
+        @await Html.PartialAsync("_SimpleItemsTable", Model.Training)
+    </div>
+
+    <div id="assets" class="tab-pane fade">
+        @await Html.PartialAsync("_SimpleItemsTable", Model.Assets)
+    </div>
+</div>

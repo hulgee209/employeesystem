@@ -1,0 +1,24 @@
+﻿@model ErrorViewModel
+@{
+    ViewData["Title"] = "Алдаа";
+}
+
+<h1 class="text-danger">Алдаа.</h1>
+<h2 class="text-danger">Таны хүсэлтийг боловсруулах үед алдаа гарлаа.</h2>
+
+@if (Model.ShowRequestId)
+{
+    <p>
+        <strong>Хүсэлтийн дугаар:</strong> <code>@Model.RequestId</code>
+    </p>
+}
+
+<h3>Хөгжүүлэлтийн горим</h3>
+<p>
+    <strong>Development</strong> орчин руу шилжвэл гарсан алдааны дэлгэрэнгүй мэдээлэл харагдана.
+</p>
+<p>
+    <strong>Нийтэд байршуулсан апп дээр Development орчныг идэвхжүүлэхгүй байх хэрэгтэй.</strong>
+    Энэ нь алдаанаас үүдэлтэй мэдрэмтгий мэдээллийг хэрэглэгчдэд харуулах эрсдэлтэй.
+    Дотоод орчинд оношлохдоо <strong>ASPNETCORE_ENVIRONMENT</strong> орчны хувьсагчийг <strong>Development</strong> болгож тохируулаад аппыг дахин эхлүүлнэ үү.
+</p>

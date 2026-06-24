@@ -1,0 +1,73 @@
+@model EmployeeSystem.Models.Employee360DetailsViewModel
+
+@{
+    var attendanceRate = Model.Attendance.Count == 0
+        ? 0
+        : Model.Attendance.Average(a => a.Status == "Present" || a.Status == "Late" ? 100 : 0);
+    var latestSalary = Model.Payroll.FirstOrDefault()?.NetSalary ?? 0;
+    var performanceAverage = Model.Performance.Average(r => r.Score)?.ToString("N1") ?? "0";
+}
+
+<div class="row-detail-content">
+    <div class="row g-3">
+        <div class="col-md-3">
+            <div class="card metric-card h-100">
+                <div class="card-body text-center">
+                    <h6 class="metric-label">Ирцийн хувь</h6>
+                    <h3 class="fw-bold">@attendanceRate.ToString("N0")%</h3>
+                    <small>@Model.Attendance.Count(a => a.Status == "Late") хоцролт</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card h-100">
+                <div class="card-body text-center">
+                    <h6 class="metric-label">Сүүлийн цалин</h6>
+                    <h3 class="fw-bold">@latestSalary.ToString("N0") ₮</h3>
+                    <small>@Model.Payroll.Count бүртгэл</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card h-100">
+                <div class="card-body text-center">
+                    <h6 class="metric-label">Гүйцэтгэл</h6>
+                    <h3 class="fw-bold">@performanceAverage</h3>
+                    <small>@Model.Performance.Count үнэлгээ</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card metric-card h-100">
+                <div class="card-body text-center">
+                    <h6 class="metric-label">Чөлөө</h6>
+                    <h3 class="fw-bold">@Model.Leave.Count</h3>
+                    <small>ашигласан өдөр</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <h6 class="fw-bold">Ирцийн түүх (сүүлийн 10)</h6>
+            @await Html.PartialAsync("_SimpleAttendanceTable", Model.Attendance.Take(10).ToList())
+        </div>
+        <div class="col-md-6">
+            <h6 class="fw-bold">Чөлөөний түүх</h6>
+            @await Html.PartialAsync("_SimpleItemsTable", Model.Leave.Take(10).ToList())
+        </div>
+    </div>
+
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <h6 class="fw-bold">Төслүүд</h6>
+            @await Html.PartialAsync("_SimpleItemsTable", Model.Projects.Take(10).ToList())
+        </div>
+        <div class="col-md-6">
+            <h6 class="fw-bold">Сургалт ба хөрөнгө</h6>
+            @await Html.PartialAsync("_SimpleItemsTable", Model.Training.Take(5).ToList())
+            @await Html.PartialAsync("_SimpleItemsTable", Model.Assets.Take(5).ToList())
+        </div>
+    </div>
+</div>

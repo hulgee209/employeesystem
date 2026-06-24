@@ -1,0 +1,701 @@
+@model IEnumerable<EmployeeSystem.Models.EmployeeGridRow>
+
+@{
+    ViewData["Title"] = "Ажилтны удирдлагын төв";
+    var isAdminOrHr = User.IsInRole("Admin") || User.IsInRole("HR");
+    var isManagerOnly = User.IsInRole("Manager") && !isAdminOrHr;
+    var canEdit = isAdminOrHr || isManagerOnly;
+    var canBulkEdit = isAdminOrHr;
+    var canDelete = isAdminOrHr;
+    var canExport = isAdminOrHr || isManagerOnly;
+    var currentEmployeeId = int.TryParse(User.FindFirst("EmployeeId")?.Value, out var parsedEmployeeId)
+        ? parsedEmployeeId
+        : 0;
+}
+
+<div class="hr-workspace">
+    <div class="hr-workspace-header">
+        <div>
+            <p class="workspace-eyebrow">HR ажлын үндсэн дэлгэц</p>
+            <h1>Ажилтны удирдлагын төв</h1>
+            <p class="workspace-subtitle">Ажилтан, цалин, ирц, гүйцэтгэл, сургалт, төсөл, хөрөнгийн мэдээллийг нэг дор харуулна.</p>
+        </div>
+        <div class="workspace-actions">
+            @if (User.IsInRole("Admin") || User.IsInRole("HR"))
+            {
+                <a asp-controller="Employees" asp-action="Create" class="btn btn-success">Ажилтан нэмэх</a>
+            }
+            @if (canExport)
+            {
+                <button type="button" class="btn btn-outline-secondary" onclick="exportGrid('xlsx')">Excel татах</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="exportGrid('pdf')">PDF татах</button>
+            }
+        </div>
+    </div>
+
+    <div class="workspace-filter-bar">
+        <div class="filter-field wide">
+            <label for="filterSearch">Нэгдсэн хайлт</label>
+            <input id="filterSearch" class="form-control form-control-sm" placeholder="Нэр, имэйл, утас, хэлтэс, албан тушаал">
+        </div>
+        <div class="filter-field">
+            <label for="filterDepartment">Хэлтэс</label>
+            <select id="filterDepartment" class="form-select form-select-sm">
+                <option value="">Бүгд</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="filterPosition">Албан тушаал</label>
+            <select id="filterPosition" class="form-select form-select-sm">
+                <option value="">Бүгд</option>
+            </select>
+        </div>
+        <div class="filter-field">
+            <label for="filterStatus">Төлөв</label>
+            <select id="filterStatus" class="form-select form-select-sm">
+                <option value="">Бүгд</option>
+                <option value="true">Идэвхтэй</option>
+                <option value="false">Идэвхгүй</option>
+            </select>
+        </div>
+        <div class="filter-field mini">
+            <label for="salaryFilter">Цалин</label>
+            <input id="salaryFilter" class="form-control form-control-sm" type="number" min="0">
+        </div>
+        <div class="filter-field mini">
+            <label for="attendanceFilter">Ирц</label>
+            <input id="attendanceFilter" class="form-control form-control-sm" type="number" min="0" max="100">
+        </div>
+        <div class="filter-field mini">
+            <label for="performanceFilter">Гүйцэтгэл</label>
+            <input id="performanceFilter" class="form-control form-control-sm" type="number" min="0" max="100">
+        </div>
+        <div class="filter-field">
+            <label for="hireDateFilter">Орсон огноо</label>
+            <input id="hireDateFilter" class="form-control form-control-sm" type="date">
+        </div>
+        <div class="filter-actions">
+            <button type="button" class="btn btn-sm btn-primary" onclick="applyFilters()">Шүүх</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="resetFilters()">Цэвэрлэх</button>
+        </div>
+    </div>
+
+    <div id="bulkActions" class="bulk-toolbar" hidden>
+        <strong><span id="selectedCount">0</span> сонгосон</strong>
+        @if (canBulkEdit)
+        {
+            <select id="bulkDepartment" class="form-select form-select-sm">
+                <option value="">Хэлтэс оноох</option>
+            </select>
+            <div id="bulkManager" class="bulk-manager-select"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkAssignDepartment()">Хэлтэс оноох</button>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="bulkAssignManager()">Менежер оноох</button>
+            <button type="button" class="btn btn-sm btn-success" onclick="bulkUpdateStatus(true)">Идэвхжүүлэх</button>
+            <button type="button" class="btn btn-sm btn-warning" onclick="bulkUpdateStatus(false)">Идэвхгүй болгох</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportGrid('xlsx')">Excel татах</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportGrid('pdf')">PDF татах</button>
+        }
+    </div>
+
+    <div class="workspace-grid-shell">
+        <div class="grid-summary-bar">
+            <span id="gridTotalSummary">Ажилтны жагсаалт ачаалж байна...</span>
+            <div class="grid-top-pager">
+                <span class="grid-summary-hint">Нэг хуудсанд</span>
+                <select id="topPageSize" class="form-select form-select-sm" onchange="changeGridPageSize(this.value)">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                </select>
+                <span class="grid-summary-hint">мөр</span>
+                <button id="gridPrevPage" type="button" class="btn btn-sm btn-outline-secondary" onclick="goGridPage(-1)">Өмнөх</button>
+                <span id="gridPageSummary" class="grid-summary-hint">1/1</span>
+                <button id="gridNextPage" type="button" class="btn btn-sm btn-outline-secondary" onclick="goGridPage(1)">Дараах</button>
+            </div>
+        </div>
+        <div id="employeesGrid"></div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end employee-360-drawer" tabindex="-1" id="employeeDrawer">
+    <div class="offcanvas-header border-bottom">
+        <div>
+            <h5 class="offcanvas-title fw-bold">Ажилтан хурдан харах</h5>
+            <small class="text-muted">Профайл, цалин, ирц, чөлөө, сургалт, төсөл, хөрөнгө, гүйцэтгэл</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body" id="employeeDrawerContent">
+        <div class="text-center py-5 text-muted">Ачаалж байна...</div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver/dist/FileSaver.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable/dist/jspdf.plugin.autotable.min.js"></script>
+    <script>
+        const canEditGrid = @Json.Serialize(canEdit);
+        const canBulkEdit = @Json.Serialize(canBulkEdit);
+        const canDeleteEmployee = @Json.Serialize(canDelete);
+        const canExportGrid = @Json.Serialize(canExport);
+        const isAdminOrHr = @Json.Serialize(isAdminOrHr);
+        const isManagerOnly = @Json.Serialize(isManagerOnly);
+        const currentEmployeeId = @Json.Serialize(currentEmployeeId);
+        let gridInstance = null;
+        let bulkManagerInstance = null;
+        let lookupData = { departments: [], positions: [], employees: [] };
+        let currentFilters = {
+            search: '',
+            departmentId: '',
+            positionId: '',
+            status: '',
+            salaryMin: '',
+            attendanceMin: '',
+            performanceMin: '',
+            hireFrom: '',
+            hireTo: ''
+        };
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            await populateFilterDropdowns();
+            initGrid();
+            wireFilterShortcuts();
+        });
+
+        async function populateFilterDropdowns() {
+            const res = await fetch('/Employees/GetFilterData');
+            lookupData = await res.json();
+
+            fillSelect('filterDepartment', lookupData.departments, 'departmentId', 'departmentName', 'Бүгд');
+            fillSelect('filterPosition', lookupData.positions, 'positionId', 'positionName', 'Бүгд');
+            fillSelect('bulkDepartment', lookupData.departments, 'departmentId', 'departmentName', 'Хэлтэс оноох');
+            if (canBulkEdit) {
+                initBulkManagerLookup();
+            }
+        }
+
+        function fillSelect(id, rows, valueField, textField, firstText) {
+            const select = document.getElementById(id);
+            if (!select) return;
+            select.innerHTML = `<option value="">${firstText}</option>`;
+            (rows || []).forEach(row => {
+                const option = document.createElement('option');
+                option.value = row[valueField];
+                option.textContent = row[textField] || `${row.firstName || ''} ${row.lastName || ''}`.trim();
+                select.appendChild(option);
+            });
+        }
+
+        function initBulkManagerLookup() {
+            bulkManagerInstance = $('#bulkManager').dxSelectBox({
+                placeholder: 'Менежер оноох',
+                valueExpr: 'employeeId',
+                displayExpr: 'fullName',
+                searchEnabled: true,
+                minSearchLength: 0,
+                showClearButton: true,
+                width: 220,
+                dataSource: new DevExpress.data.CustomStore({
+                    key: 'employeeId',
+                    load: function (loadOptions) {
+                        const params = new URLSearchParams({ take: 50 });
+                        if (loadOptions.searchValue) {
+                            params.set('search', loadOptions.searchValue);
+                        }
+                        return fetch('/Employees/EmployeeLookup?' + params.toString())
+                            .then(response => response.json());
+                    },
+                    byKey: function (key) {
+                        return fetch('/Employees/EmployeeLookup?take=1&search=' + encodeURIComponent(key))
+                            .then(response => response.json())
+                            .then(rows => rows[0]);
+                    }
+                })
+            }).dxSelectBox('instance');
+        }
+
+        function initGrid() {
+            const employeeStore = new DevExpress.data.CustomStore({
+                key: 'EmployeeId',
+                loadMode: 'processed',
+                load: function (loadOptions) {
+                    const params = new URLSearchParams({
+                        skip: loadOptions.skip || 0,
+                        take: loadOptions.take || 50
+                    });
+                    appendFilters(params);
+
+                    return fetch('/Employees/GridData?' + params.toString())
+                        .then(response => {
+                            if (!response.ok) throw new Error('Жагсаалтын өгөгдөл ачаалж чадсангүй');
+                            return response.json();
+                        })
+                        .then(result => ({
+                            data: (result.data || []).map(normalizeEmployeeRow),
+                            totalCount: result.totalCount || 0
+                        }));
+                },
+                totalCount: function () {
+                    const params = new URLSearchParams({ skip: 0, take: 1 });
+                    appendFilters(params);
+
+                    return fetch('/Employees/GridData?' + params.toString())
+                        .then(response => {
+                            if (!response.ok) throw new Error('Нийт ажилтны тоо ачаалж чадсангүй');
+                            return response.json();
+                        })
+                        .then(result => result.totalCount || 0);
+                },
+                update: function (key, values) {
+                    const field = Object.keys(values)[0];
+                    if (!field) return Promise.resolve();
+
+                    return fetch('/Employees/UpdateInlineField', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            employeeId: key,
+                            field: field,
+                            value: values[field] == null ? '' : String(values[field])
+                        })
+                    }).then(response => {
+                        if (!response.ok) throw new Error('Хадгалж чадсангүй');
+                        DevExpress.ui.notify('Нүд хадгалагдлаа.', 'success', 1400);
+                        return values;
+                    });
+                }
+            });
+
+            gridInstance = $('#employeesGrid').dxDataGrid({
+                dataSource: new DevExpress.data.DataSource({
+                    store: employeeStore,
+                    paginate: true,
+                    pageSize: 50,
+                    requireTotalCount: true
+                }),
+                remoteOperations: true,
+                repaintChangesOnly: true,
+                cacheEnabled: false,
+                height: 'auto',
+                columnAutoWidth: true,
+                allowColumnResizing: true,
+                allowColumnReordering: true,
+                rowAlternationEnabled: true,
+                showBorders: true,
+                hoverStateEnabled: true,
+                focusedRowEnabled: true,
+                keyExpr: 'EmployeeId',
+                scrolling: { mode: 'standard' },
+                paging: { pageSize: 50 },
+                pager: {
+                    visible: true,
+                    displayMode: 'full',
+                    showInfo: true,
+                    infoText: '{0}/{1} хуудас ({2} ажилтан)',
+                    showPageSizeSelector: true,
+                    showNavigationButtons: true,
+                    allowedPageSizes: [25, 50, 100]
+                },
+                selection: {
+                    mode: canBulkEdit ? 'multiple' : 'none',
+                    showCheckBoxesMode: canBulkEdit ? 'always' : 'none'
+                },
+                editing: {
+                    mode: 'cell',
+                    allowUpdating: canEditGrid,
+                    startEditAction: 'click',
+                    selectTextOnEditStart: true
+                },
+                searchPanel: {
+                    visible: false
+                },
+                filterRow: {
+                    visible: true,
+                    applyFilter: 'auto'
+                },
+                headerFilter: { visible: true },
+                columnChooser: {
+                    enabled: true,
+                    mode: 'select',
+                    allowSearch: true
+                },
+                export: {
+                    enabled: canExportGrid,
+                    allowExportSelectedData: canBulkEdit
+                },
+                masterDetail: {
+                    enabled: true,
+                    template: function (container, options) {
+                        const holder = $('<div class="row-detail-loading">Ажилтны түүх ачаалж байна...</div>').appendTo(container);
+                        fetch(`/Employees/RowDetailData?id=${options.data.EmployeeId}`)
+                            .then(response => response.text())
+                            .then(html => holder.html(html))
+                            .catch(() => holder.html('<div class="text-danger p-3">Ажилтны түүхийг ачаалж чадсангүй.</div>'));
+                    }
+                },
+                onSelectionChanged: function (e) {
+                    if (!canBulkEdit) return;
+                    const count = e.selectedRowKeys.length;
+                    document.getElementById('selectedCount').textContent = count;
+                    document.getElementById('bulkActions').hidden = count === 0;
+                },
+                onContentReady: function () {
+                    updateGridSummary();
+                },
+                onRowDblClick: function (e) {
+                    if (e.rowType === 'data') {
+                        openEmployeeDrawer(e.data.EmployeeId);
+                    }
+                },
+                onEditorPreparing: function (e) {
+                    if (e.parentType !== 'dataRow') return;
+                    if (!isEditableField(e.dataField, e.row ? e.row.data : null)) {
+                        e.editorOptions.readOnly = true;
+                    }
+                },
+                columns: [
+                    { dataField: 'EmployeeId', caption: 'Дугаар', width: 95, fixed: true, allowEditing: false },
+                    { dataField: 'FirstName', caption: 'Нэр', minWidth: 130 },
+                    { dataField: 'LastName', caption: 'Овог', minWidth: 130 },
+                    {
+                        dataField: 'DepartmentId',
+                        caption: 'Хэлтэс',
+                        minWidth: 170,
+                        lookup: { dataSource: lookupData.departments, valueExpr: 'departmentId', displayExpr: 'departmentName' }
+                    },
+                    {
+                        dataField: 'PositionId',
+                        caption: 'Албан тушаал',
+                        minWidth: 170,
+                        lookup: { dataSource: lookupData.positions, valueExpr: 'positionId', displayExpr: 'positionName' }
+                    },
+                    { dataField: 'Phone', caption: 'Утас', minWidth: 125 },
+                    { dataField: 'Email', caption: 'Имэйл', minWidth: 210 },
+                    { dataField: 'HireDate', caption: 'Ажилд орсон', dataType: 'date', format: 'yyyy-MM-dd', width: 125, allowEditing: false },
+                    { dataField: 'LatestSalary', caption: 'Сүүлийн цалин', dataType: 'number', format: '#,##0', width: 135, allowEditing: false },
+                    { dataField: 'AverageSalary', caption: 'Дундаж цалин', dataType: 'number', format: '#,##0', width: 145, allowEditing: false },
+                    { dataField: 'AttendanceRate', caption: 'Ирцийн хувь', dataType: 'number', format: '#0.##', width: 145, allowEditing: false },
+                    { dataField: 'LateCount', caption: 'Хоцролт', dataType: 'number', width: 105, allowEditing: false },
+                    { dataField: 'AbsentCount', caption: 'Таслалт', dataType: 'number', width: 115, allowEditing: false },
+                    { dataField: 'LeaveBalance', caption: 'Чөлөөний үлдэгдэл', dataType: 'number', width: 145, allowEditing: false },
+                    { dataField: 'PerformanceScore', caption: 'Гүйцэтгэлийн оноо', dataType: 'number', format: '#0.##', width: 155, allowEditing: false },
+                    { dataField: 'TrainingCount', caption: 'Сургалт', dataType: 'number', width: 130, allowEditing: false },
+                    { dataField: 'ProjectCount', caption: 'Төсөл', dataType: 'number', width: 125, allowEditing: false },
+                    { dataField: 'AssetCount', caption: 'Хөрөнгө', dataType: 'number', width: 115, allowEditing: false },
+                    {
+                        dataField: 'IsActive',
+                        caption: 'Төлөв',
+                        width: 120,
+                        lookup: {
+                            dataSource: [{ value: true, text: 'Идэвхтэй' }, { value: false, text: 'Идэвхгүй' }],
+                            valueExpr: 'value',
+                            displayExpr: 'text'
+                        },
+                        cellTemplate: function (container, options) {
+                            const active = options.value === true;
+                            $('<span>')
+                                .addClass('status-pill ' + (active ? 'active' : 'inactive'))
+                                .text(active ? 'Идэвхтэй' : 'Идэвхгүй')
+                                .appendTo(container);
+                        }
+                    },
+                    {
+                        caption: 'Үйлдэл',
+                        width: 110,
+                        fixed: true,
+                        fixedPosition: 'right',
+                        allowEditing: false,
+                        allowFiltering: false,
+                        allowHeaderFiltering: false,
+                        allowSorting: false,
+                        visible: canDeleteEmployee,
+                        cellTemplate: function (container, options) {
+                            $('<button type="button">')
+                                .addClass('btn btn-sm btn-danger')
+                                .text('Устгах')
+                                .on('click', function (event) {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    deleteEmployee(options.data.EmployeeId, `${options.data.FirstName || ''} ${options.data.LastName || ''}`.trim());
+                                })
+                                .appendTo(container);
+                        }
+                    }
+                ]
+            }).dxDataGrid('instance');
+        }
+
+        function normalizeEmployeeRow(row) {
+            return {
+                EmployeeId: row.employeeId ?? row.EmployeeId,
+                FirstName: row.firstName ?? row.FirstName,
+                LastName: row.lastName ?? row.LastName,
+                DepartmentId: row.departmentId ?? row.DepartmentId,
+                DepartmentName: row.departmentName ?? row.DepartmentName,
+                PositionId: row.positionId ?? row.PositionId,
+                PositionName: row.positionName ?? row.PositionName,
+                ManagerId: row.managerId ?? row.ManagerId,
+                ManagerName: row.managerName ?? row.ManagerName,
+                Phone: row.phone ?? row.Phone,
+                Email: row.email ?? row.Email,
+                HireDate: row.hireDate ?? row.HireDate,
+                LatestSalary: row.latestSalary ?? row.LatestSalary ?? 0,
+                AverageSalary: row.averageSalary ?? row.AverageSalary ?? 0,
+                AttendanceRate: row.attendanceRate ?? row.AttendanceRate ?? 0,
+                LateCount: row.lateCount ?? row.LateCount ?? 0,
+                AbsentCount: row.absentCount ?? row.AbsentCount ?? 0,
+                LeaveBalance: row.leaveBalance ?? row.LeaveBalance ?? 0,
+                PerformanceScore: row.performanceScore ?? row.PerformanceScore ?? 0,
+                TrainingCount: row.trainingCount ?? row.TrainingCount ?? 0,
+                ProjectCount: row.projectCount ?? row.ProjectCount ?? 0,
+                AssetCount: row.assetCount ?? row.AssetCount ?? 0,
+                IsActive: row.isActive ?? row.IsActive
+            };
+        }
+
+        function isEditableField(field, row) {
+            if (!canEditGrid) return false;
+            if (isAdminOrHr) {
+                return ['FirstName', 'LastName', 'Phone', 'Email', 'DepartmentId', 'PositionId', 'IsActive'].includes(field);
+            }
+
+            if (isManagerOnly) {
+                const managerEditableFields = ['Phone', 'Email', 'PositionId'];
+                return row &&
+                    Number(row.ManagerId) === Number(currentEmployeeId) &&
+                    managerEditableFields.includes(field);
+            }
+
+            return false;
+        }
+
+        function appendFilters(params) {
+            if (currentFilters.search) params.set('search', currentFilters.search);
+            if (currentFilters.departmentId) params.set('departmentId', currentFilters.departmentId);
+            if (currentFilters.positionId) params.set('positionId', currentFilters.positionId);
+            if (currentFilters.status) params.set('status', currentFilters.status);
+            if (currentFilters.salaryMin) params.set('salaryMin', currentFilters.salaryMin);
+            if (currentFilters.salaryMax) params.set('salaryMax', currentFilters.salaryMax);
+            if (currentFilters.attendanceMin) params.set('attendanceMin', currentFilters.attendanceMin);
+            if (currentFilters.attendanceMax) params.set('attendanceMax', currentFilters.attendanceMax);
+            if (currentFilters.performanceMin) params.set('performanceMin', currentFilters.performanceMin);
+            if (currentFilters.performanceMax) params.set('performanceMax', currentFilters.performanceMax);
+            if (currentFilters.hireFrom) params.set('hireFrom', currentFilters.hireFrom);
+            if (currentFilters.hireTo) params.set('hireTo', currentFilters.hireTo);
+        }
+
+        function readFilters() {
+            currentFilters = {
+                search: document.getElementById('filterSearch').value.trim(),
+                departmentId: document.getElementById('filterDepartment').value,
+                positionId: document.getElementById('filterPosition').value,
+                status: document.getElementById('filterStatus').value,
+                salaryMin: document.getElementById('salaryFilter').value,
+                salaryMax: '',
+                attendanceMin: document.getElementById('attendanceFilter').value,
+                attendanceMax: '',
+                performanceMin: document.getElementById('performanceFilter').value,
+                performanceMax: '',
+                hireFrom: document.getElementById('hireDateFilter').value,
+                hireTo: document.getElementById('hireDateFilter').value
+            };
+        }
+
+        function applyFilters() {
+            readFilters();
+            gridInstance.clearSelection();
+            gridInstance.refresh();
+        }
+
+        function resetFilters() {
+            ['filterSearch', 'filterDepartment', 'filterPosition', 'filterStatus', 'salaryFilter', 'attendanceFilter', 'performanceFilter', 'hireDateFilter'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            readFilters();
+            gridInstance.clearSelection();
+            gridInstance.clearFilter();
+            gridInstance.refresh();
+        }
+
+        function wireFilterShortcuts() {
+            document.getElementById('filterSearch').addEventListener('keydown', function (event) {
+                if (event.key === 'Enter') applyFilters();
+            });
+        }
+
+        function updateGridSummary() {
+            if (!gridInstance) return;
+
+            const dataSource = gridInstance.getDataSource();
+            const total = dataSource.totalCount();
+            const pageIndex = dataSource.pageIndex();
+            const pageSize = dataSource.pageSize();
+            const visibleRows = gridInstance.getVisibleRows().filter(row => row.rowType === 'data').length;
+            const pageCount = Math.max(1, Math.ceil(total / pageSize));
+            const start = total === 0 ? 0 : (pageIndex * pageSize) + 1;
+            const end = total === 0 ? 0 : Math.min(start + visibleRows - 1, total);
+            const summary = document.getElementById('gridTotalSummary');
+            const pageSummary = document.getElementById('gridPageSummary');
+            const pageSizeSelect = document.getElementById('topPageSize');
+            const prev = document.getElementById('gridPrevPage');
+            const next = document.getElementById('gridNextPage');
+
+            if (summary) {
+                summary.textContent = `Нийт ${total.toLocaleString('mn-MN')} ажилтан байна. Одоо ${start.toLocaleString('mn-MN')}-${end.toLocaleString('mn-MN')} мөрийг харуулж байна.`;
+            }
+
+            if (pageSummary) {
+                pageSummary.textContent = `${(pageIndex + 1).toLocaleString('mn-MN')}/${pageCount.toLocaleString('mn-MN')} хуудас`;
+            }
+
+            if (pageSizeSelect && String(pageSizeSelect.value) !== String(pageSize)) {
+                pageSizeSelect.value = String(pageSize);
+            }
+
+            if (prev) {
+                prev.disabled = pageIndex <= 0;
+            }
+
+            if (next) {
+                next.disabled = pageIndex >= pageCount - 1;
+            }
+        }
+
+        function changeGridPageSize(value) {
+            if (!gridInstance) return;
+            gridInstance.pageSize(Number(value));
+            gridInstance.pageIndex(0);
+        }
+
+        function goGridPage(delta) {
+            if (!gridInstance) return;
+            const dataSource = gridInstance.getDataSource();
+            const total = dataSource.totalCount();
+            const pageSize = dataSource.pageSize();
+            const pageCount = Math.max(1, Math.ceil(total / pageSize));
+            const nextPage = Math.max(0, Math.min(dataSource.pageIndex() + delta, pageCount - 1));
+            gridInstance.pageIndex(nextPage);
+        }
+
+        async function openEmployeeDrawer(employeeId) {
+            const drawerElement = document.getElementById('employeeDrawer');
+            const drawer = bootstrap.Offcanvas.getOrCreateInstance(drawerElement);
+            const content = document.getElementById('employeeDrawerContent');
+            content.innerHTML = '<div class="text-center py-5 text-muted">Ачаалж байна...</div>';
+            drawer.show();
+            try {
+                const res = await fetch(`/Employees/DrawerData?id=${employeeId}`);
+                content.innerHTML = await res.text();
+            } catch {
+                content.innerHTML = '<div class="text-danger p-4">Ажилтан мэдээллийг ачаалж чадсангүй.</div>';
+            }
+        }
+
+        async function bulkUpdateStatus(isActive) {
+            const ids = getSelectedEmployeeIds();
+            if (!ids.length || !canBulkEdit) return;
+            await postBulk('/Employees/BulkUpdateStatus', { employeeIds: ids, isActive });
+            DevExpress.ui.notify(`${ids.length} ажилтан шинэчлэгдлээ.`, 'success', 1600);
+            gridInstance.clearSelection();
+            gridInstance.refresh();
+        }
+
+        async function bulkAssignDepartment() {
+            const ids = getSelectedEmployeeIds();
+            const departmentId = Number(document.getElementById('bulkDepartment').value);
+            if (!ids.length || !departmentId || !canBulkEdit) {
+                DevExpress.ui.notify('Ажилтан болон хэлтэс сонгоно уу.', 'warning', 1800);
+                return;
+            }
+            await postBulk('/Employees/BulkAssignDepartment', { employeeIds: ids, departmentId });
+            DevExpress.ui.notify(`${ids.length} ажилтны хэлтэс шинэчлэгдлээ.`, 'success', 1600);
+            gridInstance.clearSelection();
+            gridInstance.refresh();
+        }
+
+        async function bulkAssignManager() {
+            const ids = getSelectedEmployeeIds();
+            const managerId = Number(bulkManagerInstance ? bulkManagerInstance.option('value') : 0);
+            if (!ids.length || !managerId || !canBulkEdit) {
+                DevExpress.ui.notify('Ажилтан болон менежер сонгоно уу.', 'warning', 1800);
+                return;
+            }
+            await postBulk('/Employees/BulkAssignManager', { employeeIds: ids, managerId });
+            DevExpress.ui.notify(`${ids.length} ажилтанд менежер оноолоо.`, 'success', 1600);
+            gridInstance.clearSelection();
+            gridInstance.refresh();
+        }
+
+        function getSelectedEmployeeIds() {
+            return gridInstance.getSelectedRowsData().map(row => row.EmployeeId);
+        }
+
+        async function deleteEmployee(employeeId, fullName) {
+            if (!canDeleteEmployee || !employeeId) return;
+
+            const label = fullName || `#${employeeId}`;
+            if (!confirm(`${label} ажилтныг устгах уу?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/Employees/DeleteInline', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employeeId })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.message || 'Ажилтныг устгаж чадсангүй.');
+                }
+
+                DevExpress.ui.notify('Ажилтан устгагдлаа.', 'success', 1600);
+                gridInstance.refresh();
+            } catch (error) {
+                DevExpress.ui.notify(error.message || 'Ажилтныг устгаж чадсангүй.', 'error', 2200);
+            }
+        }
+
+        function postBulk(url, payload) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(response => {
+                if (!response.ok) throw new Error('Бөөн үйлдэл амжилтгүй боллоо');
+                return response.json();
+            });
+        }
+
+        function exportGrid(format) {
+            if (!gridInstance) return;
+
+            if (format === 'pdf') {
+                const doc = new jspdf.jsPDF({ orientation: 'landscape' });
+                DevExpress.pdfExporter.exportDataGrid({
+                    jsPDFDocument: doc,
+                    component: gridInstance
+                }).then(function () {
+                    doc.save('ajiltan-udirdlagiin-tuv.pdf');
+                });
+                return;
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Ажилтнууд');
+            DevExpress.excelExporter.exportDataGrid({
+                component: gridInstance,
+                worksheet: worksheet,
+                autoFilterEnabled: true
+            }).then(function () {
+                return workbook.xlsx.writeBuffer();
+            }).then(function (buffer) {
+                saveAs(new Blob([buffer], { type: 'application/octet-stream' }), 'ajiltan-udirdlagiin-tuv.xlsx');
+            });
+        }
+    </script>
+}

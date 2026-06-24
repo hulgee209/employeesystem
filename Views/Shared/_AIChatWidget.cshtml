@@ -1,0 +1,75 @@
+<div id="aiWidgetIntro" class="ai-widget-intro">
+    <button id="aiWidgetIntroClose"
+            class="ai-widget-intro-close"
+            type="button"
+            aria-label="Хаах">
+        ×
+    </button>
+
+    <strong>Сайн байна уу.</strong>
+    <span>HR мэдээллээр юугаар туслах вэ?</span>
+</div>
+
+<button id="aiWidgetButton"
+        class="ai-widget-button"
+        type="button"
+        aria-label="AI HR Assistant нээх">
+    <img src="~/images/ai-hr-bot.svg" alt="" aria-hidden="true">
+</button>
+
+<div id="aiWidgetPanel" class="ai-widget-panel">
+    <div class="ai-widget-history" id="aiWidgetHistory">
+        <div style="padding: 12px; border-bottom: 1px solid #e5e7eb; font-size: 12px; font-weight: 600; color: #64748b; text-align: center;">
+            Түүх
+        </div>
+        <div id="aiWidgetHistoryList" style="flex: 1; overflow-y: auto;"></div>
+    </div>
+
+    <div class="ai-widget-content">
+        <div class="ai-widget-header">
+            <div class="ai-widget-brand">
+                <img class="ai-widget-avatar" src="~/images/ai-hr-bot.svg" alt="" aria-hidden="true">
+                <div>
+                    <strong>AI HR Assistant</strong>
+                    <span>HR туслах chatbot</span>
+                </div>
+            </div>
+
+            <button id="aiWidgetMinimize"
+                    class="ai-widget-minimize"
+                    type="button"
+                    aria-label="Багасгах">
+                −
+            </button>
+        </div>
+
+        <div id="aiWidgetMessages" class="ai-widget-messages">
+            <div class="ai-widget-date">
+                @DateTime.Now.ToString("yyyy-MM-dd")
+            </div>
+
+            <div class="ai-widget-message ai">
+                <img class="ai-widget-message-avatar" src="~/images/ai-hr-bot.svg" alt="" aria-hidden="true">
+                <div>
+                    <div class="ai-widget-bubble">
+                        Сайн байна уу? HR мэдээлэлтэй холбоотой асуултаа бичнэ үү.
+                    </div>
+                    <small>@DateTime.Now.ToString("HH:mm")</small>
+                </div>
+            </div>
+        </div>
+
+        <form id="aiWidgetForm" class="ai-widget-form">
+            <textarea id="aiWidgetInput"
+                      rows="1"
+                      placeholder="Энд бичнэ үү..."
+                      autocomplete="off"></textarea>
+
+            <button id="aiWidgetSend"
+                    type="submit"
+                    aria-label="Илгээх">
+                ➤
+            </button>
+        </form>
+    </div>
+</div>

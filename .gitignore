@@ -1,0 +1,14 @@
+bin/
+obj/
+artifacts/
+__pycache__/
+.vs/
+.vscode/
+*.user
+*.suo
+*.log
+appsettings.Development.json
+appsettings.Production.json
+*.db
+*.db-shm
+*.db-wal

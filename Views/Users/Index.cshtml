@@ -1,0 +1,70 @@
+@model IEnumerable<EmployeeSystem.Models.UserListItemViewModel>
+
+@{
+    ViewData["Title"] = "Хэрэглэгчид";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2 class="fw-bold mb-1">Хэрэглэгчид</h2>
+        <p class="text-muted mb-0">Нэвтрэх эрх, төлөв, эрхийн тохиргоо.</p>
+    </div>
+
+    <a asp-controller="Users" asp-action="Create" class="btn btn-success">
+        Хэрэглэгч нэмэх
+    </a>
+</div>
+
+<div class="card grid-card">
+    <div class="card-body">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Нэвтрэх нэр</th>
+                    <th>Ажилтан</th>
+                    <th>Эрхүүд</th>
+                    <th>Төлөв</th>
+                    <th width="180">Үйлдэл</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in Model)
+                {
+                    <tr>
+                        <td>@user.Username</td>
+                        <td>@user.EmployeeName</td>
+                        <td>@user.Roles</td>
+                        <td>
+                            <span class="badge @(user.IsActive ? "bg-success" : "bg-secondary")">
+                                @(user.IsActive ? "Идэвхтэй" : "Идэвхгүй")
+                            </span>
+                        </td>
+                        <td>
+                            <a asp-controller="Users"
+                               asp-action="Edit"
+                               asp-route-id="@user.UserId"
+                               class="btn btn-primary btn-sm">
+                                Засах
+                            </a>
+
+                            @if (user.IsActive)
+                            {
+                                <form asp-controller="Users"
+                                      asp-action="Disable"
+                                      asp-route-id="@user.UserId"
+                                      method="post"
+                                      class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit"
+                                            class="btn btn-warning btn-sm">
+                                        Идэвхгүй болгох
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

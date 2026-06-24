@@ -1,0 +1,124 @@
+@model EmployeeSystem.Models.AuditLog
+
+@{
+    ViewData["Title"] = "Аудитын бүртгэлийн дэлгэрэнгүй";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Аудитын бүртгэлийн дэлгэрэнгүй</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Бүртгэлийн дугаар</h6>
+                            <p>@Model.AuditLogId</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Үүссэн огноо</h6>
+                            <p>@Model.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</p>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Хэрэглэгчийн нэр</h6>
+                            <p>@Model.UserName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Хэрэглэгчийн дугаар</h6>
+                            <p>@Model.UserId</p>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">IP хаяг</h6>
+                            <p>@Model.IpAddress</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Үйлдэл</h6>
+                            <p>
+                                @switch (Model.Action)
+                                {
+                                    case "CREATE":
+                                        <span class="badge bg-success">Үүсгэсэн</span>
+                                        break;
+                                    case "UPDATE":
+                                        <span class="badge bg-info">Шинэчилсэн</span>
+                                        break;
+                                    case "DELETE":
+                                        <span class="badge bg-danger">Устгасан</span>
+                                        break;
+                                    default:
+                                        <span class="badge bg-secondary">@Model.Action</span>
+                                        break;
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Хүснэгтийн нэр</h6>
+                            <p>@Model.TableName</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="text-muted">Бичлэгийн дугаар</h6>
+                            <p>@Model.RecordId</p>
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    @if (!string.IsNullOrEmpty(Model.OldValues))
+                    {
+                        <div class="mb-3">
+                            <h5>Өмнөх утгууд</h5>
+                            <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                                <pre>@Model.OldValues</pre>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(Model.NewValues))
+                    {
+                        <div class="mb-3">
+                            <h5>Шинэ утгууд</h5>
+                            <div class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">
+                                <pre>@Model.NewValues</pre>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Навигаци</h5>
+                </div>
+                <div class="card-body">
+                    <a href="@Url.Action("Index")" class="btn btn-primary w-100 mb-2">Бүртгэл рүү буцах</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin: 0;
+        font-size: 0.85rem;
+    }
+</style>

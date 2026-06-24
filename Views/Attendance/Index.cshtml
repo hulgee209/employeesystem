@@ -1,0 +1,183 @@
+@model EmployeeSystem.Models.AttendanceIndexViewModel
+
+@{
+    ViewData["Title"] = "Ирц";
+
+    string StatusText(string? status) => status switch
+    {
+        "Present" => "Ирсэн",
+        "Late" => "Хоцорсон",
+        "Absent" => "Тасалсан",
+        _ => status ?? "-"
+    };
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Ирц</h2>
+        <p class="text-muted mb-0">Өдөр тутмын ирцийн хяналт болон сүүлийн саруудын чиг хандлага.</p>
+    </div>
+</div>
+
+<form method="get" class="card grid-card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Ажилтан</label>
+                <input name="search" value="@Model.Search" class="form-control" placeholder="Ажилтнаар хайх" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Хэлтэс</label>
+                <select name="departmentId" class="form-select" asp-items="Model.Departments">
+                    <option value="">Бүх хэлтэс</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Огноо</label>
+                <input name="date" value="@Model.Date?.ToString("yyyy-MM-dd")" type="date" class="form-control" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Төлөв</label>
+                <select name="status" class="form-select" asp-items="Model.Statuses">
+                    <option value="">Бүх төлөв</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" type="submit">Шүүх</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Ирсэн ажилтан</span>
+                <strong>@Model.PresentEmployees</strong>
+                <small>@((Model.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Хоцорсон ажилтан</span>
+                <strong>@Model.LateEmployees</strong>
+                <small>@((Model.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Тасалсан ажилтан</span>
+                <strong>@Model.AbsentEmployees</strong>
+                <small>@((Model.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"))</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <div class="card graph-card h-100">
+            <div class="card-body">
+                <div class="graph-title">
+                    <span>Ирцийн төлөв</span>
+                    <small>Дугуй график</small>
+                </div>
+                <canvas id="attendanceStatusChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card graph-card h-100">
+            <div class="card-body">
+                <div class="graph-title">
+                    <span>Сарын ирцийн чиг хандлага</span>
+                    <small>Сүүлийн 6 сар</small>
+                </div>
+                <canvas id="attendanceTrendChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card grid-card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Огноо</th>
+                        <th>Ажилтан</th>
+                        <th>Хэлтэс</th>
+                        <th>Төлөв</th>
+                        <th>Ирсэн цаг</th>
+                        <th>Гарсан цаг</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Records)
+                {
+                    <tr>
+                        <td>@item.AttendanceDate.ToString("yyyy-MM-dd")</td>
+                        <td>@item.EmployeeName</td>
+                        <td>@item.DepartmentName</td>
+                        <td><span class="badge bg-secondary">@StatusText(item.Status)</span></td>
+                        <td>@(item.CheckInTime?.ToString("HH:mm") ?? "-")</td>
+                        <td>@(item.CheckOutTime?.ToString("HH:mm") ?? "-")</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const attendancePalette = ['#2563eb', '#ea580c', '#dc2626', '#059669', '#7c3aed'];
+        const selectedAttendanceDate = '@Model.Date?.ToString("yyyy-MM-dd")';
+        const attendanceStatusLabels = {
+            Present: 'Ирсэн',
+            Late: 'Хоцорсон',
+            Absent: 'Тасалсан'
+        };
+
+        fetch(`/Attendance/StatusChart${selectedAttendanceDate ? `?date=${selectedAttendanceDate}` : ''}`)
+            .then(response => response.json())
+            .then(data => {
+                new Chart(document.getElementById('attendanceStatusChart'), {
+                    type: 'pie',
+                    data: {
+                        labels: data.map(item => attendanceStatusLabels[item.label] || item.label || '-'),
+                        datasets: [{
+                            data: data.map(item => item.count),
+                            backgroundColor: attendancePalette
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            });
+
+        fetch('/Attendance/MonthlyTrend')
+            .then(response => response.json())
+            .then(data => {
+                new Chart(document.getElementById('attendanceTrendChart'), {
+                    type: 'line',
+                    data: {
+                        labels: data.map(item => item.label),
+                        datasets: [
+                            { label: 'Ирсэн', data: data.map(item => item.present), borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,.12)', tension: .3 },
+                            { label: 'Хоцорсон', data: data.map(item => item.late), borderColor: '#ea580c', backgroundColor: 'rgba(234,88,12,.12)', tension: .3 },
+                            { label: 'Тасалсан', data: data.map(item => item.absent), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,.12)', tension: .3 }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            });
+    </script>
+}

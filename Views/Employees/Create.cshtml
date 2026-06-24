@@ -1,0 +1,76 @@
+@model EmployeeSystem.Models.Employee
+
+@{
+    ViewData["Title"] = "Ажилтан нэмэх";
+}
+
+<h2 class="fw-bold mb-4">Ажилтан нэмэх</h2>
+
+<form asp-action="Create" method="post" class="card grid-card">
+    <div class="card-body">
+        <div class="mb-3">
+            <label class="form-label">Нэр</label>
+            <input asp-for="FirstName" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Овог</label>
+            <input asp-for="LastName" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Хэлтэс</label>
+
+            <select asp-for="DepartmentId"
+                    class="form-control">
+                @foreach (var dep in ViewBag.Departments)
+                {
+                    <option value="@dep.DepartmentId">
+                        @dep.DepartmentName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Албан тушаал</label>
+
+            <select asp-for="PositionId"
+                    class="form-control">
+                @foreach (var pos in ViewBag.Positions)
+                {
+                    <option value="@pos.PositionId">
+                        @pos.PositionName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Утас</label>
+            <input asp-for="Phone" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input asp-for="Email" class="form-control" />
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Ажилд орсон огноо</label>
+            <input asp-for="HireDate"
+                   type="date"
+                   class="form-control" />
+        </div>
+
+        <button type="submit" class="btn btn-success">
+            Хадгалах
+        </button>
+
+        <a asp-controller="Employees"
+           asp-action="Index"
+           class="btn btn-secondary">
+            Болих
+        </a>
+    </div>
+</form>

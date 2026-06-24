@@ -1,0 +1,37 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: employeesystem-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-EmployeeSystem_2026!}"
+    ports:
+      - "14333:1433"
+    volumes:
+      - employeesystem-sql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: employeesystem-web
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ApplyMigrations: "true"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=EmployeeDB;User Id=sa;Password=${MSSQL_SA_PASSWORD:-EmployeeSystem_2026!};TrustServerCertificate=True;MultipleActiveResultSets=True;"
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  employeesystem-sql-data:

@@ -1,0 +1,25 @@
+@model IReadOnlyList<EmployeeSystem.Models.PerformanceRowViewModel>
+
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Огноо</th>
+                <th>Оноо</th>
+                <th>Үнэлэгч</th>
+                <th>Тайлбар</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@(item.ReviewDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                <td class="fw-bold">@(item.Score?.ToString("N2") ?? "-")</td>
+                <td>@(item.Reviewer ?? "-")</td>
+                <td>@(item.Comments ?? "-")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

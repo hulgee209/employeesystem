@@ -1,0 +1,74 @@
+@model EmployeeSystem.Models.UserEditViewModel
+
+@{
+    ViewData["Title"] = Model.UserId.HasValue ? "Хэрэглэгч засах" : "Хэрэглэгч нэмэх";
+}
+
+<h2 class="fw-bold mb-4">@ViewData["Title"]</h2>
+
+<form asp-controller="Users" asp-action="Save" method="post" class="card grid-card">
+    <div class="card-body">
+        @Html.AntiForgeryToken()
+        <input asp-for="UserId" type="hidden" />
+
+        <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
+
+        <div class="mb-3">
+            <label asp-for="Username" class="form-label">Нэвтрэх нэр</label>
+            <input asp-for="Username" class="form-control" />
+            <span asp-validation-for="Username" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="Password" class="form-label">
+                Нууц үг @(Model.UserId.HasValue ? "(солихгүй бол хоосон үлдээнэ)" : "")
+            </label>
+            <input asp-for="Password" class="form-control" />
+            <span asp-validation-for="Password" class="text-danger"></span>
+        </div>
+
+        <div class="mb-3">
+            <label asp-for="EmployeeId" class="form-label">Холбох ажилтан</label>
+            <select asp-for="EmployeeId"
+                    asp-items="Model.Employees"
+                    class="form-select">
+                <option value="">-- Ажилтан сонгохгүй --</option>
+            </select>
+            <span asp-validation-for="EmployeeId" class="text-danger"></span>
+        </div>
+
+        <div class="form-check mb-3">
+            <input asp-for="IsActive" class="form-check-input" />
+            <label asp-for="IsActive" class="form-check-label">Идэвхтэй</label>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Эрхүүд</label>
+            <div class="role-check-list">
+                @foreach (var role in Model.Roles)
+                {
+                    <label class="form-check">
+                        <input type="checkbox"
+                               name="SelectedRoleIds"
+                               value="@role.Value"
+                               class="form-check-input"
+                               @(role.Selected ? "checked" : "") />
+                        <span class="form-check-label">@role.Text</span>
+                    </label>
+                }
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success">
+            Хадгалах
+        </button>
+
+        <a asp-controller="Users" asp-action="Index" class="btn btn-secondary">
+            Болих
+        </a>
+    </div>
+</form>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

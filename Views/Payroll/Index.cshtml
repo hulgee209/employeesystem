@@ -1,0 +1,235 @@
+@model EmployeeSystem.Models.PayrollIndexViewModel
+
+@{
+    ViewData["Title"] = "Цалин";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1">Цалин</h2>
+        <p class="text-muted mb-0">Цалингийн зардал, дүн шинжилгээ болон ажилтны цалингийн бүртгэл.</p>
+    </div>
+</div>
+
+<form method="get" class="card grid-card payroll-filter-card mb-4">
+    <div class="card-body">
+        <div class="payroll-filter-grid">
+            <div>
+                <label class="form-label">Ажилтан</label>
+                <input name="search" value="@Model.Search" class="form-control form-control-sm" placeholder="Нэр эсвэл имэйлээр хайх" />
+            </div>
+            <div>
+                <label class="form-label">Хэлтэс</label>
+                <select name="departmentId" class="form-select form-select-sm" asp-items="Model.Departments">
+                    <option value="">Бүх хэлтэс</option>
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Сар</label>
+                <input name="month" value="@Model.Month" type="month" class="form-control form-control-sm" />
+            </div>
+            <div class="payroll-filter-actions">
+                <button class="btn btn-primary btn-sm" type="submit">Шүүх</button>
+                <a class="btn btn-outline-secondary btn-sm" href="@Url.Action("Index", "Payroll")">Цэвэрлэх</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Дундаж цалин</span>
+                <strong>@Model.AverageSalary.ToString("N2") ₮</strong>
+                <small>Шүүсэн бүртгэлүүд</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Хамгийн их цалин</span>
+                <strong>@Model.HighestSalary.ToString("N2") ₮</strong>
+                <small>Шүүсэн бүртгэлүүд</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Хамгийн бага цалин</span>
+                <strong>@Model.LowestSalary.ToString("N2") ₮</strong>
+                <small>Шүүсэн бүртгэлүүд</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card">
+            <div class="card-body">
+                <span class="metric-label">Нийт цалингийн зардал</span>
+                <strong>@Model.TotalPayrollCost.ToString("N2") ₮</strong>
+                <small>Шүүсэн бүртгэлүүд</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <div class="card graph-card h-100">
+            <div class="card-body">
+                <div class="graph-title">
+                    <span>Цалингийн тархалт</span>
+                    <small>Цэвэр цалин</small>
+                </div>
+                <canvas id="salaryDistributionChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card graph-card h-100">
+            <div class="card-body">
+                <div class="graph-title">
+                    <span>Хэлтсийн цалингийн зардал</span>
+                    <small>Топ 10</small>
+                </div>
+                <canvas id="departmentSalaryChart" height="260"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card grid-card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Сар</th>
+                        <th>Ажилтан</th>
+                        <th>Хэлтэс</th>
+                        <th>Үндсэн</th>
+                        <th>Нэмэгдэл</th>
+                        <th>Суутгал</th>
+                        <th>Гарт олгох</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @foreach (var item in Model.Records)
+                {
+                    <tr>
+                        <td>@(item.PayrollMonth?.ToString("yyyy-MM") ?? "-")</td>
+                        <td>@item.EmployeeName</td>
+                        <td>@item.DepartmentName</td>
+                        <td>@item.BaseSalary.ToString("N2") ₮</td>
+                        <td>@item.Bonus.ToString("N2") ₮</td>
+                        <td>@item.Deductions.ToString("N2") ₮</td>
+                        <td class="fw-bold">@item.NetSalary.ToString("N2") ₮</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .payroll-filter-card {
+        max-width: 980px;
+    }
+
+    .payroll-filter-card .card-body {
+        padding: 14px 16px;
+    }
+
+    .payroll-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 0.9fr) minmax(150px, 0.7fr) auto;
+        gap: 12px;
+        align-items: end;
+    }
+
+    .payroll-filter-grid .form-label {
+        margin-bottom: 5px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #334155;
+    }
+
+    .payroll-filter-actions {
+        display: flex;
+        gap: 8px;
+        white-space: nowrap;
+    }
+
+    @@media (max-width: 900px) {
+        .payroll-filter-card {
+            max-width: none;
+        }
+
+        .payroll-filter-grid {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .payroll-filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .payroll-filter-actions {
+            justify-content: stretch;
+        }
+
+        .payroll-filter-actions .btn {
+            flex: 1;
+        }
+    }
+</style>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const payrollMonth = '@Model.Month';
+        const payrollQuery = payrollMonth ? `?month=${payrollMonth}` : '';
+
+        fetch(`/Payroll/SalaryDistribution${payrollQuery}`)
+            .then(response => response.json())
+            .then(data => {
+                new Chart(document.getElementById('salaryDistributionChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(item => item.label),
+                        datasets: [{
+                            label: 'Ажилтны тоо',
+                            data: data.map(item => item.count),
+                            backgroundColor: '#2563eb'
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            });
+
+        fetch(`/Payroll/DepartmentSalaryCost${payrollQuery}`)
+            .then(response => response.json())
+            .then(data => {
+                new Chart(document.getElementById('departmentSalaryChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(item => item.label),
+                        datasets: [{
+                            label: 'Цалингийн зардал',
+                            data: data.map(item => item.amount),
+                            backgroundColor: '#059669'
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false
+                    }
+                });
+            });
+    </script>
+}

@@ -1,0 +1,25 @@
+@model IReadOnlyList<EmployeeSystem.Models.Employee360SimpleItem>
+
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Нэр</th>
+                <th>Төлөв</th>
+                <th>Огноо</th>
+                <th>Дэлгэрэнгүй</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.Title</td>
+                <td>@(item.Status ?? "-")</td>
+                <td>@(item.DateText ?? "-")</td>
+                <td>@(item.Detail ?? "-")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

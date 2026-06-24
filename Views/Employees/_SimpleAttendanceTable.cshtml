@@ -1,0 +1,35 @@
+@model IReadOnlyList<EmployeeSystem.Models.AttendanceRowViewModel>
+
+@{
+    string StatusText(string? status) => status switch
+    {
+        "Present" => "Ирсэн",
+        "Late" => "Хоцорсон",
+        "Absent" => "Тасалсан",
+        _ => status ?? "-"
+    };
+}
+
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Огноо</th>
+                <th>Төлөв</th>
+                <th>Ирсэн</th>
+                <th>Гарсан</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@item.AttendanceDate.ToString("yyyy-MM-dd")</td>
+                <td>@StatusText(item.Status)</td>
+                <td>@(item.CheckInTime?.ToString("HH:mm") ?? "-")</td>
+                <td>@(item.CheckOutTime?.ToString("HH:mm") ?? "-")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

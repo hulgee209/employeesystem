@@ -1,0 +1,12 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/artifacts
+**/__pycache__
+*.user
+*.suo
+*.log
+Dockerfile
+docker-compose*.yml

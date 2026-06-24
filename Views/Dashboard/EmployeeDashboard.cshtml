@@ -1,0 +1,186 @@
+@model EmployeeDashboardViewModel
+
+@{
+    ViewData["Title"] = "Миний хяналтын самбар";
+}
+
+<div class="container-fluid mt-4">
+    <h2 class="mb-4">Миний хяналтын самбар</h2>
+
+    @if (Model.Me.EmployeeId == 0)
+    {
+        <div class="alert alert-warning">
+            Таны нэвтрэх эрх ажилтны бүртгэлтэй холбогдоогүй байна. Админаар хэрэглэгчийн бүртгэл дээр ажилтан холбож өгнө үү.
+        </div>
+    }
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Миний мэдээлэл</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Нэр:</strong> @Model.Me.FirstName @Model.Me.LastName</p>
+                            <p><strong>Имэйл:</strong> <a href="mailto:@Model.Me.Email">@Model.Me.Email</a></p>
+                            <p><strong>Утас:</strong> @Model.Me.Phone</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Хэлтэс:</strong> @Model.Me.DepartmentName</p>
+                            <p><strong>Албан тушаал:</strong> @Model.Me.PositionName</p>
+                            <p><strong>Орсон огноо:</strong> @Model.Me.HireDate.ToString("yyyy-MM-dd")</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Үлдсэн чөлөөний өдөр</h6>
+                    <h2 class="card-title text-success">@Model.RemainingLeaveDays</h2>
+                    <small class="text-muted">Энэ жил ашиглах боломжтой өдөр</small>
+                </div>
+            </div>
+        </div>
+
+        @if (Model.LatestPayslip != null)
+        {
+            <div class="col-md-6 mb-3">
+                <div class="card border-info">
+                    <div class="card-body text-center">
+                        <h6 class="card-subtitle mb-2 text-muted">Сүүлийн цалингийн хуудас</h6>
+                        <h2 class="card-title text-info">@Model.LatestPayslip.NetSalary.ToString("N2") ₮</h2>
+                        <small class="text-muted">@Model.LatestPayslip.PayMonth.ToString("yyyy-MM")</small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (Model.LatestPayslip != null)
+    {
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">Цалингийн задаргаа (@Model.LatestPayslip.PayMonth.ToString("yyyy-MM"))</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <p><strong>Үндсэн цалин:</strong></p>
+                                <h5>@Model.LatestPayslip.BaseSalary.ToString("N2") ₮</h5>
+                            </div>
+                            <div class="col-md-3">
+                                <p><strong>Нэмэгдэл:</strong></p>
+                                <h5 class="text-success">+ @Model.LatestPayslip.Bonus.ToString("N2") ₮</h5>
+                            </div>
+                            <div class="col-md-3">
+                                <p><strong>Суутгал:</strong></p>
+                                <h5 class="text-danger">- @Model.LatestPayslip.Deductions.ToString("N2") ₮</h5>
+                            </div>
+                            <div class="col-md-3">
+                                <p><strong>Гарт олгох:</strong></p>
+                                <h5 class="text-primary">@Model.LatestPayslip.NetSalary.ToString("N2") ₮</h5>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Сүүлийн мэдэгдлүүд</h5>
+                </div>
+                @if (Model.MyNotifications.Count > 0)
+                {
+                    <div class="list-group list-group-flush">
+                        @foreach (var notif in Model.MyNotifications)
+                        {
+                            <div class="list-group-item @(notif.IsRead ? "" : "bg-light")">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        @notif.Title
+                                        @if (!notif.IsRead)
+                                        {
+                                            <span class="badge bg-primary">Шинэ</span>
+                                        }
+                                    </h6>
+                                    <small class="text-muted">@notif.CreatedAt.ToString("yyyy-MM-dd HH:mm")</small>
+                                </div>
+                                <p class="mb-1">@notif.Message</p>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="card-body text-center text-muted">
+                        Мэдэгдэл алга
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Шуурхай холбоосууд</h5>
+                </div>
+                <div class="card-body d-flex flex-wrap gap-2">
+                    <a href="@Url.Action("Index", "Attendance")" class="btn btn-outline-success btn-sm">
+                        Ирц харах
+                    </a>
+                    <a href="@Url.Action("Index", "Payroll")" class="btn btn-outline-warning btn-sm">
+                        Миний цалингийн хуудсууд
+                    </a>
+                    <a href="@Url.Action("Index", "AIChat")" class="btn btn-outline-info btn-sm">
+                        AI-аас асуух
+                    </a>
+                </div>
+                <div class="card-footer text-muted small">
+                    Чөлөө хүсэх workflow одоогоор системд байхгүй тул ажиллахгүй товчийг нуусан.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+
+    .card-title {
+        margin: 0;
+    }
+
+    .list-group-item {
+        border-left: 4px solid transparent;
+    }
+
+    .list-group-item.bg-light {
+        border-left-color: #007bff;
+    }
+
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    h5 {
+        margin-bottom: 0.5rem;
+    }
+</style>

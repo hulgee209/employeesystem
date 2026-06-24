@@ -1,0 +1,27 @@
+@model IReadOnlyList<EmployeeSystem.Models.PayrollRowViewModel>
+
+<div class="table-responsive">
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Сар</th>
+                <th>Үндсэн цалин</th>
+                <th>Бонус</th>
+                <th>Суутгал</th>
+                <th>Net</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model)
+        {
+            <tr>
+                <td>@(item.PayrollMonth?.ToString("yyyy-MM") ?? "-")</td>
+                <td>@item.BaseSalary.ToString("C")</td>
+                <td>@item.Bonus.ToString("C")</td>
+                <td>@item.Deductions.ToString("C")</td>
+                <td class="fw-bold">@item.NetSalary.ToString("C")</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>

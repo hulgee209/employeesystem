@@ -1,0 +1,245 @@
+@model EmployeeSystem.Models.ExecutiveDashboardViewModel
+
+@{
+    ViewData["Title"] = "Хяналтын самбар";
+}
+
+<div class="dashboard-container container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2 class="fw-bold mb-0">📊 Хяналтын самбар</h2>
+            <small class="text-muted">Ажилтны удирдлагын товч тайлан</small>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-3">
+        <!-- ROW 1: KPI cards -->
+        <div class="col-12">
+            <div class="row g-4">
+                <div class="col-6 col-md-3">
+                    <div class="card kpi-card bg-primary h-100 d-flex flex-column justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="font-size:28px">👥</div>
+                            <div>
+                                <div class="kpi-sub">Нийт ажилтан</div>
+                                <div class="kpi-number">@Model.TotalEmployees</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                    <div class="card kpi-card bg-success h-100 d-flex flex-column justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="font-size:28px">🏢</div>
+                            <div>
+                                <div class="kpi-sub">Хэлтэс</div>
+                                <div class="kpi-number">@Model.TotalDepartments</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                    <div class="card kpi-card bg-warning h-100 d-flex flex-column justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="font-size:28px">💼</div>
+                            <div>
+                                <div class="kpi-sub">Албан тушаал</div>
+                                <div class="kpi-number">@Model.TotalPositions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-6 col-md-3">
+                    <div class="card kpi-card bg-info h-100 d-flex flex-column justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div style="font-size:28px">📈</div>
+                            <div>
+                                <div class="kpi-sub">Ажилтны өсөлт</div>
+                                <div class="kpi-number">@Model.EmployeeGrowthValue</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 2: Department & Position distribution -->
+        <div class="col-12">
+            <div class="row g-4">
+                <div class="col-12 col-md-6">
+                    <div class="card card-tight">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="mb-0">Хэлтэсийн тархалт</h6>
+                                <small class="text-muted">Топ хэлтэс</small>
+                            </div>
+                            <div style="height:160px;">
+                                <canvas id="departmentDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="card card-tight">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="mb-0">Албан тушаалын тархалт</h6>
+                                <small class="text-muted">Топ албан тушаал</small>
+                            </div>
+                            <div style="height:160px;">
+                                <canvas id="positionDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 3: Payroll & Attendance summary -->
+        <div class="col-12">
+            <div class="row g-4">
+                <div class="col-12 col-md-6">
+                    <div class="card card-tight">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="mb-0">Цалингийн хураангуй</h6>
+                                <small class="text-muted">Их цалинтай хэлтэс</small>
+                            </div>
+                            <div style="height:160px;">
+                                <canvas id="payrollSummaryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12 col-md-6">
+                    <div class="card card-tight">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h6 class="mb-0">Ирцийн хураангуй</h6>
+                                <small class="text-muted">Сүүлийн тасалалт</small>
+                            </div>
+                            <div style="height:160px;">
+                                <canvas id="attendanceSummaryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 4: Performance full width -->
+        <div class="col-12">
+            <div class="card card-tight">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <h6 class="mb-0">Гүйцэтгэлийн шинжилгээ</h6>
+                        <small class="text-muted">Хэлтэсийн гүйцэтгэл</small>
+                    </div>
+                    <div style="height:380px;">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 5: AI Executive Insights -->
+        <div class="col-12">
+            <div class="card card-tight">
+                <div class="card-body">
+                    <h5>AI захирлуудын дүгнэлт</h5>
+                    <div class="exec-insights mt-3">
+                        @foreach(var item in Model.TopDepartments.Take(4))
+                        {
+                            <div class="card p-3">
+                                <strong>@item.Label</strong>
+                                <div class="text-muted">@item.Value ажилтан</div>
+                            </div>
+                        }
+
+                        @foreach(var item in Model.HighestPayrollCost.Take(2))
+                        {
+                            <div class="card p-3">
+                                <strong>@item.Label</strong>
+                                <div class="text-muted">@String.Format("{0:N0}", item.Value)₮</div>
+                            </div>
+                        }
+
+                        @if(Model.BestPerformingDepartments.Any())
+                        {
+                            <div class="card p-3">
+                                <strong>Гүйцэтгэл сайтай</strong>
+                                <div class="text-muted">@Model.BestPerformingDepartments.First().Label</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ROW 6: AI Generated Analysis -->
+        <div class="col-12">
+            <div class="card card-tight">
+                <div class="card-body ai-analysis-card">
+                    <h5 class="mb-3">AI үүсгэсэн шинжилгээ</h5>
+                    <div id="aiAnalysisContent">
+                        @if(ViewBag.AIInsight != null)
+                        {
+                            <div>@Html.Raw(ViewBag.AIInsight)</div>
+                        }
+                        else
+                        {
+                            <div class="text-muted">AI шинжилгээ одоогоор алга байна.</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* Chart.js and rendering *@
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    (function(){
+        const dept = @Html.Raw(ViewBag.TopDepartmentsJson ?? "[]");
+        const payroll = @Html.Raw(ViewBag.HighestPayrollCostJson ?? "[]");
+        const perf = @Html.Raw(ViewBag.BestPerformingDepartmentsJson ?? "[]");
+        const abs = @Html.Raw(ViewBag.MostAbsencesJson ?? "[]");
+        const growth = @Html.Raw(ViewBag.EmployeeGrowthTrendJson ?? "[]");
+
+        function toLabelsValues(items){
+            const labels = items.map(i => i.label ?? i.Label ?? '');
+            const values = items.map(i => Number(i.value ?? i.Value ?? 0));
+            return { labels, values };
+        }
+
+        function makeHorizontalBar(ctx, items, color){
+            const d = toLabelsValues(items);
+            new Chart(ctx, { type: 'bar', data:{ labels: d.labels, datasets:[{ data:d.values, backgroundColor: color }] }, options:{ indexAxis:'y', plugins:{legend:{display:false}}, maintainAspectRatio:false } });
+        }
+
+        function makeDoughnut(ctx, items, colors){
+            const d = toLabelsValues(items);
+            new Chart(ctx, { type:'doughnut', data:{ labels:d.labels, datasets:[{ data:d.values, backgroundColor: colors }] }, options:{ plugins:{legend:{position:'right'}}, maintainAspectRatio:false } });
+        }
+
+        // render compact charts
+        try{
+            makeHorizontalBar(document.getElementById('departmentDistributionChart').getContext('2d'), dept, '#60a5fa');
+            makeHorizontalBar(document.getElementById('positionDistributionChart').getContext('2d'), perf, '#f97316');
+            makeHorizontalBar(document.getElementById('payrollSummaryChart').getContext('2d'), payroll, '#f59e0b');
+            makeHorizontalBar(document.getElementById('attendanceSummaryChart').getContext('2d'), abs, '#ef4444');
+
+            // performance full chart - line
+            const perfData = toLabelsValues(growth);
+            new Chart(document.getElementById('performanceChart').getContext('2d'), {
+                type: 'line', data:{ labels: perfData.labels, datasets:[{ data: perfData.values, borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.08)', tension:0.25 }] }, options:{ plugins:{legend:{display:false}}, maintainAspectRatio:false }
+            });
+        }catch(e){ console.error('Charts render', e); }
+    })();
+</script>

@@ -1,0 +1,135 @@
+@model ManagerDashboardViewModel
+
+@{
+    ViewData["Title"] = "Менежерийн хяналтын самбар";
+}
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+        <div>
+            <h2 class="mb-1">Менежерийн хяналтын самбар</h2>
+            <p class="text-muted mb-0">Өөрт шууд харьяалагдах багийн мэдээлэл, ирц болон гүйцэтгэлийг хянах хэсэг.</p>
+        </div>
+        <a href="@Url.Action("Index", "Dashboard")" class="btn btn-outline-secondary btn-sm">Шинэчлэх</a>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Багийн хэмжээ</h6>
+                    <h2 class="card-title">@Model.MyTeamSize</h2>
+                    <small class="text-muted">Шууд харьяалагдах ажилтнууд</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Анхаарах гүйцэтгэлийн үнэлгээ</h6>
+                    <h2 class="card-title">@Model.PendingPerformanceReviews</h2>
+                    <small class="text-muted">Сүүлийн 6 сард үнэлгээ хийгдээгүй багийн гишүүд</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Миний баг (@Model.TeamMembers.Count)</h5>
+                    <a href="@Url.Action("Index", "Employees")" class="btn btn-light btn-sm">Ажилтнууд харах</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Нэр</th>
+                                <th>Албан тушаал</th>
+                                <th>Сүүлийн үнэлгээ</th>
+                                <th>Үйлдэл</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.TeamMembers.Count > 0)
+                            {
+                                @foreach (var member in Model.TeamMembers)
+                                {
+                                    <tr>
+                                        <td>@member.FirstName @member.LastName</td>
+                                        <td>@member.PositionName</td>
+                                        <td>
+                                            @if (member.LastReviewDate.HasValue)
+                                            {
+                                                <span>@member.LastReviewDate.Value.ToString("yyyy-MM-dd")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-warning text-dark">Үнэлгээ хийгдээгүй</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <a href="@Url.Action("Details", "Employees", new { id = member.EmployeeId })" class="btn btn-sm btn-info">Харах</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted">Шууд харьяалагдах багийн ажилтан алга</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Шуурхай холбоосууд</h5>
+                </div>
+                <div class="card-body d-flex flex-wrap gap-2">
+                    <a href="@Url.Action("Index", "Performance")" class="btn btn-outline-primary btn-sm">
+                        Гүйцэтгэл харах
+                    </a>
+                    <a href="@Url.Action("Index", "Attendance")" class="btn btn-outline-success btn-sm">
+                        Ирц харах
+                    </a>
+                    <a href="@Url.Action("Index", "Employees")" class="btn btn-outline-secondary btn-sm">
+                        Багийн ажилтнууд харах
+                    </a>
+                </div>
+                <div class="card-footer text-muted small">
+                    Чөлөө зөвшөөрөх болон шинэ гүйцэтгэлийн үнэлгээ үүсгэх workflow одоогоор системд байхгүй тул ажиллахгүй товчнуудыг нуусан.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+
+    .card-title {
+        margin: 0;
+    }
+
+    .table-responsive {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .table tbody tr:hover {
+        background-color: #f5f5f5;
+    }
+</style>

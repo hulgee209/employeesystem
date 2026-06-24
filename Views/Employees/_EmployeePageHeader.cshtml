@@ -1,0 +1,129 @@
+@model dynamic
+
+<div class="employee-page-header d-flex justify-content-between align-items-center mb-3">
+    <div class="flex-grow-1">
+        <h2 class="fw-bold mb-1">HR удирдлагын төв</h2>
+        <p class="text-muted mb-0">Ажилтан 360 · Цалин · Ирц · Гүйцэтгэл · Сургалт · Төсөл · Хөрөнгө</p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        @if (User.IsInRole("Admin") || User.IsInRole("HR"))
+        {
+            <a asp-controller="Employees" asp-action="Create" class="btn btn-success">
+                <i class="bi bi-plus-lg"></i> Ажилтан нэмэх
+            </a>
+        }
+        <button class="btn btn-outline-primary" onclick="exportGrid('xlsx')">
+            <i class="bi bi-file-earmark-excel"></i> Excel татах
+        </button>
+        <button class="btn btn-outline-danger" onclick="exportGrid('pdf')">
+            <i class="bi bi-file-earmark-pdf"></i> PDF татах
+        </button>
+    </div>
+</div>
+
+<div class="card filter-card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-3">
+                <input type="text" id="filterSearch" class="form-control form-control-sm" placeholder="Нэр, имэйл, утас, хэлтэс, албан тушаалаар хайх">
+            </div>
+            <div class="col-md-2">
+                <select id="filterDepartment" class="form-select form-select-sm">
+                    <option value="">Бүх хэлтэс</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterPosition" class="form-select form-select-sm">
+                    <option value="">Бүх албан тушаал</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select id="filterStatus" class="form-select form-select-sm">
+                    <option value="">Бүх төлөв</option>
+                    <option value="true">Идэвхтэй</option>
+                    <option value="false">Идэвхгүй</option>
+                </select>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-sm btn-outline-secondary w-100" onclick="applyFilters()">Шүүх</button>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-sm btn-outline-secondary w-100" onclick="resetFilters()">Цэвэрлэх</button>
+            </div>
+            <div class="col-md-1">
+                <button class="btn btn-sm btn-outline-secondary w-100" onclick="toggleColumnChooser()">
+                    <i class="bi bi-columns-gap"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card grid-card mb-3">
+    <div class="card-body p-0">
+        <div id="employeesGrid"></div>
+    </div>
+</div>
+
+<div id="bulkActions" class="card bulk-actions-card" style="display: none;">
+    <div class="card-body py-2">
+        <div class="d-flex gap-2 align-items-center">
+            <span class="fw-bold me-2">Бөөн үйлдэл (<span id="selectedCount">0</span> сонгосон):</span>
+            <select id="bulkDepartment" class="form-select form-select-sm" style="width: 200px;">
+                <option value="">Хэлтэс оноох...</option>
+            </select>
+            <select id="bulkManager" class="form-select form-select-sm" style="width: 200px;">
+                <option value="">Менежер оноох...</option>
+            </select>
+            <button class="btn btn-sm btn-success" onclick="bulkActivate()">Идэвхжүүлэх</button>
+            <button class="btn btn-sm btn-warning" onclick="bulkDeactivate()">Идэвхгүй болгох</button>
+            <button class="btn btn-sm btn-outline-primary" onclick="exportSelected()">Сонгосныг татах</button>
+        </div>
+    </div>
+</div>
+
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+    <button class="btn btn-primary rounded-circle shadow ai-copilot-btn" onclick="openAiCopilot()" title="AI туслах">
+        <i class="bi bi-robot"></i>
+    </button>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="employeeDrawer" style="width: 70%; max-width: 900px;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title fw-bold">Ажилтан 360</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0" id="employeeDrawerContent">
+        <div class="text-center py-5 text-muted">Ачаалж байна...</div>
+    </div>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="aiCopilotDrawer" style="width: 400px; max-width: 450px;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title fw-bold"><i class="bi bi-robot"></i> AI туслах</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="mb-3">
+            <label class="form-label fw-bold">Одоогийн өгөгдлөөс асуух:</label>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-outline-secondary ai-suggested" data-question="Show highest paid employees in this list">Өндөр цалинтай</button>
+                <button class="btn btn-sm btn-outline-secondary ai-suggested" data-question="Which employees have attendance problems?">Ирцийн асуудал</button>
+                <button class="btn btn-sm btn-outline-secondary ai-suggested" data-question="Employees without training records">Сургалтгүй</button>
+                <button class="btn btn-sm btn-outline-secondary ai-suggested" data-question="Employees with low performance">Бага гүйцэтгэл</button>
+                <button class="btn btn-sm btn-outline-secondary ai-suggested" data-question="Department salary analysis">Цалингийн шинжилгээ</button>
+            </div>
+            <textarea id="aiQuestion" class="form-control" rows="3" placeholder="Одоогийн өгөгдлийн талаар асуух..."></textarea>
+            <button class="btn btn-primary w-100 mt-2" onclick="askAi()">AI-аас асуух</button>
+        </div>
+        <div id="aiAnswer" class="ai-answer-panel" style="display: none;">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h6 class="fw-bold">AI хариу</h6>
+                    <p id="aiAnswerText" class="mb-0"></p>
+                    <pre id="aiSqlBlock" class="mt-2 p-2 bg-white border rounded small" style="display: none;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

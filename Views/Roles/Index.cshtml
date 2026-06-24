@@ -1,0 +1,29 @@
+@model IEnumerable<EmployeeSystem.Models.RoleListItemViewModel>
+
+@{
+    ViewData["Title"] = "Эрхүүд";
+}
+
+<h2 class="fw-bold mb-3">Эрхүүд</h2>
+
+<div class="card grid-card">
+    <div class="card-body">
+        <table class="table table-bordered table-hover align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Эрх</th>
+                    <th>Хэрэглэгчийн тоо</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var role in Model)
+                {
+                    <tr>
+                        <td>@role.RoleName</td>
+                        <td>@role.UserCount</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

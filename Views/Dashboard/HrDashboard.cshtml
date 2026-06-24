@@ -1,0 +1,172 @@
+@model HrDashboardViewModel
+
+@{
+    ViewData["Title"] = "HR хяналтын самбар";
+}
+
+<div class="container-fluid mt-4">
+    <h2 class="mb-4">HR хяналтын самбар</h2>
+
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card border-primary">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Нийт ажилтан</h6>
+                    <h2 class="card-title">@Model.TotalEmployees</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card border-success">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Идэвхтэй ажилтан</h6>
+                    <h2 class="card-title">@Model.ActiveEmployees</h2>
+                    <small class="text-success">@(Model.TotalEmployees > 0 ? Math.Round((double)Model.ActiveEmployees / Model.TotalEmployees * 100, 1) : 0)%</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card border-warning">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Нээлттэй албан тушаал</h6>
+                    <h2 class="card-title">@Model.OpenPositions</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3 mb-3">
+            <div class="card border-danger">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle mb-2 text-muted">Хүлээгдэж буй чөлөөний хүсэлт</h6>
+                    <h2 class="card-title">@Model.PendingLeaveRequests</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">Энэ сарын нийт цалин</h5>
+                </div>
+                <div class="card-body">
+                    <h3>@Model.TotalPayrollThisMonth.ToString("N2") ₮</h3>
+                    <small class="text-muted">Энэ сард олгосон нийт цэвэр цалин</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Хэлтсээрх ажилтнууд</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Хэлтэс</th>
+                                <th>Тоо</th>
+                                <th>Дундаж цалин</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var dept in Model.ByDepartment)
+                            {
+                                <tr>
+                                    <td>@dept.DepartmentName</td>
+                                    <td>@dept.EmployeeCount</td>
+                                    <td>@dept.AverageSalary.ToString("N2") ₮</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Сүүлийн 30 хоногт орсон ажилтнууд</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th>Ажилтан</th>
+                                <th>Хэлтэс</th>
+                                <th>Орсон огноо</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (Model.RecentHires.Count > 0)
+                            {
+                                @foreach (var hire in Model.RecentHires)
+                                {
+                                    <tr>
+                                        <td>@hire.FirstName @hire.LastName</td>
+                                        <td>@hire.DepartmentName</td>
+                                        <td>@hire.HireDate.ToString("yyyy-MM-dd")</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted">Сүүлийн үед орсон ажилтан алга</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Удирдлагын хэрэгслүүд</h5>
+                </div>
+                <div class="card-body">
+                    <a href="@Url.Action("Index", "Employees")" class="btn btn-outline-primary btn-sm">
+                        Ажилтнууд удирдах
+                    </a>
+                    <a href="@Url.Action("Index", "Audit")" class="btn btn-outline-info btn-sm">
+                        Аудитын бүртгэл харах
+                    </a>
+                    <a href="@Url.Action("Index", "Payroll")" class="btn btn-outline-warning btn-sm">
+                        Цалин
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+
+    .card-title {
+        margin: 0;
+    }
+
+    .table-responsive {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .card-body {
+        padding: 1.5rem;
+    }
+</style>
