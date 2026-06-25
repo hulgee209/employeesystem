@@ -231,6 +231,15 @@ public class AiSqlAgentService : IAiSqlAgentService
     {
         var normalized = question.Trim().ToLowerInvariant();
 
+        if (ContainsAny(normalized, "medeelel", "medeelliig", "buren", "info", "heltes", "department"))
+        {
+            var infoAnswer = await TryAnswerEmployeeInfoDirectlyAsync(normalized);
+            if (infoAnswer != null)
+            {
+                return infoAnswer;
+            }
+        }
+
         if ((normalized.Contains("нийт") && normalized.Contains("ажилтан")) ||
             normalized.Contains("heden ajiltan") ||
             normalized.Contains("how many employee") ||
@@ -256,11 +265,7 @@ public class AiSqlAgentService : IAiSqlAgentService
                 return null;
             }
 
-            var tokens = search
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(token => token.Length >= 2)
-                .Take(4)
-                .ToArray();
+            var tokens = ExtractEmployeeSearchTokens(normalized);
 
             if (tokens.Length == 0)
             {
@@ -280,10 +285,11 @@ public class AiSqlAgentService : IAiSqlAgentService
                 .ToListAsync();
             var employees = allEmployees
                 .Where(e => tokens.Any(token =>
-                    e.FirstName.ToLowerInvariant().Contains(token) ||
-                    e.LastName.ToLowerInvariant().Contains(token) ||
-                    (e.Email != null && e.Email.ToLowerInvariant().Contains(token)) ||
-                    (e.Phone != null && e.Phone.ToLowerInvariant().Contains(token))))
+                    ExpandNameToken(token).Any(alias =>
+                        e.FirstName.ToLowerInvariant().Contains(alias) ||
+                        e.LastName.ToLowerInvariant().Contains(alias) ||
+                        (e.Email != null && e.Email.ToLowerInvariant().Contains(alias)) ||
+                        (e.Phone != null && e.Phone.ToLowerInvariant().Contains(alias)))))
                 .Take(5)
                 .ToList();
 
@@ -308,6 +314,129 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
 
         return null;
+    }
+
+    private async Task<AiSqlAgentResult?> TryAnswerEmployeeInfoDirectlyAsync(string normalizedQuestion)
+    {
+        var tokens = ExtractEmployeeSearchTokens(normalizedQuestion);
+        if (tokens.Length == 0)
+        {
+            return null;
+        }
+
+        var employees = await _context.Employees
+            .AsNoTracking()
+            .Include(e => e.Department)
+            .Include(e => e.Position)
+            .OrderBy(e => e.EmployeeId)
+            .ToListAsync();
+
+        var employee = employees.FirstOrDefault(e => tokens.Any(token => EmployeeMatchesToken(e, token)));
+        if (employee == null)
+        {
+            return new AiSqlAgentResult { Analysis = "Тийм нэртэй ажилтан олдсонгүй." };
+        }
+
+        if (ContainsAny(normalizedQuestion, "heltes", "department"))
+        {
+            return new AiSqlAgentResult
+            {
+                Analysis = $"{employee.FirstName} {employee.LastName} нь {employee.Department.DepartmentName} хэлтэст ажилладаг."
+            };
+        }
+
+        var latestPayroll = await _context.Payroll
+            .AsNoTracking()
+            .Where(p => p.EmployeeId == employee.EmployeeId)
+            .OrderByDescending(p => p.PayrollMonth)
+            .FirstOrDefaultAsync();
+        var latestPerformance = await _context.PerformanceReviews
+            .AsNoTracking()
+            .Where(p => p.EmployeeId == employee.EmployeeId)
+            .OrderByDescending(p => p.ReviewDate)
+            .FirstOrDefaultAsync();
+
+        return new AiSqlAgentResult
+        {
+            Analysis =
+                $"{employee.FirstName} {employee.LastName}\n" +
+                $"Хэлтэс: {employee.Department.DepartmentName}\n" +
+                $"Албан тушаал: {employee.Position.PositionName}\n" +
+                $"Утас: {employee.Phone ?? "-"}\n" +
+                $"Имэйл: {employee.Email ?? "-"}\n" +
+                $"Ажилд орсон: {employee.HireDate?.ToString() ?? "-"}\n" +
+                $"Төлөв: {(employee.IsActive ? "Идэвхтэй" : "Идэвхгүй")}\n" +
+                $"Сүүлийн цэвэр цалин: {(latestPayroll?.NetSalary == null ? "-" : latestPayroll.NetSalary.Value.ToString("N0"))}\n" +
+                $"Сүүлийн үнэлгээ: {(latestPerformance?.Score == null ? "-" : latestPerformance.Score.ToString())}"
+        };
+    }
+
+    private static bool ContainsAny(string text, params string[] values)
+    {
+        return values.Any(text.Contains);
+    }
+
+    private static string[] ExtractEmployeeSearchTokens(string normalizedQuestion)
+    {
+        return ExtractEmployeeSearchText(normalizedQuestion)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(NormalizeNameToken)
+            .Where(token => token.Length >= 2)
+            .Distinct()
+            .Take(8)
+            .ToArray();
+    }
+
+    private static bool EmployeeMatchesToken(Employee employee, string token)
+    {
+        var aliases = ExpandNameToken(token);
+        return aliases.Any(alias =>
+            employee.FirstName.ToLowerInvariant().Contains(alias) ||
+            employee.LastName.ToLowerInvariant().Contains(alias) ||
+            (employee.Email != null && employee.Email.ToLowerInvariant().Contains(alias)) ||
+            (employee.Phone != null && employee.Phone.ToLowerInvariant().Contains(alias)));
+    }
+
+    private static IEnumerable<string> ExpandNameToken(string token)
+    {
+        yield return token;
+
+        var aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bat"] = ["бат"],
+            ["saruul"] = ["саруул"],
+            ["munkh"] = ["мөнх"],
+            ["monh"] = ["мөнх"],
+            ["enhjin"] = ["энхжин"],
+            ["enkhjin"] = ["энхжин"],
+            ["anujin"] = ["анужин"],
+            ["temuulen"] = ["тэмүүлэн"],
+            ["nomin"] = ["номин"]
+        };
+
+        if (aliases.TryGetValue(token, out var tokenAliases))
+        {
+            foreach (var alias in tokenAliases)
+            {
+                yield return alias;
+            }
+        }
+    }
+
+    private static string NormalizeNameToken(string token)
+    {
+        var normalized = token.Trim().ToLowerInvariant();
+        foreach (var suffix in new[] { "iin", "iin", "yn", "iin", "giin", "gii", "ii", "iig", "iin" })
+        {
+            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
+                normalized.Length > suffix.Length + 1)
+            {
+                normalized = normalized[..^suffix.Length];
+                break;
+            }
+        }
+
+        return normalized;
     }
 
     private static string ExtractEmployeeSearchText(string normalizedQuestion)
@@ -395,9 +524,71 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Analysis generation error, using fallback.");
-            return "Үр дүн амжилттай боловсруулагдсан.";
+            _logger.LogWarning(ex, "Analysis generation error, using deterministic fallback.");
+            return FormatExecutionResult(execution);
         }
+    }
+
+    private static string FormatExecutionResult(SqlExecutionResult execution)
+    {
+        if (execution.Rows.Count == 0)
+        {
+            return "Өгөгдөл олдсонгүй.";
+        }
+
+        if (execution.Rows.Count == 1)
+        {
+            var row = execution.Rows[0];
+            if (row.Count == 1)
+            {
+                return $"Хариу: {FormatValue(row.Values.FirstOrDefault())}.";
+            }
+
+            return string.Join("\n", row.Take(8).Select(kvp => $"{HumanizeColumn(kvp.Key)}: {FormatValue(kvp.Value)}"));
+        }
+
+        var lines = execution.Rows
+            .Take(5)
+            .Select(row => string.Join(", ", row.Take(4).Select(kvp => $"{HumanizeColumn(kvp.Key)}: {FormatValue(kvp.Value)}")))
+            .ToList();
+
+        var suffix = execution.Rows.Count > 5
+            ? $"\n... нийт {execution.Rows.Count} мөрөөс эхний 5 мөрийг харууллаа."
+            : string.Empty;
+
+        return string.Join("\n", lines) + suffix;
+    }
+
+    private static string FormatValue(object? value)
+    {
+        return value switch
+        {
+            null => "-",
+            decimal d => d.ToString("N0"),
+            double d => d.ToString("N2"),
+            float f => f.ToString("N2"),
+            DateTime date => date.ToString("yyyy-MM-dd"),
+            _ => value.ToString() ?? "-"
+        };
+    }
+
+    private static string HumanizeColumn(string column)
+    {
+        return column switch
+        {
+            "DepartmentName" or "Department" => "Хэлтэс",
+            "Employee" or "EmployeeName" => "Ажилтан",
+            "FirstName" => "Нэр",
+            "LastName" => "Овог",
+            "Phone" => "Утас",
+            "Email" => "Имэйл",
+            "LateCount" => "Хоцролт",
+            "EmployeeCount" => "Ажилтны тоо",
+            "AverageSalary" or "AverageNetSalary" => "Дундаж цалин",
+            "NetSalary" => "Цэвэр цалин",
+            "Score" or "AverageScore" => "Үнэлгээ",
+            _ => column
+        };
     }
 
     private async Task<string> GenerateChatTextAsync(string systemPrompt, string userPrompt, int maxTokens)
