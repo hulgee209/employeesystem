@@ -65,6 +65,12 @@ public class AiSqlAgentService : IAiSqlAgentService
             var (sql, execution) = await GenerateAndExecuteSqlWithRepairAsync(question);
             if (execution.Rows.Count == 0)
             {
+                var directAnswer = await TryAnswerDirectlyAsync(question);
+                if (directAnswer != null)
+                {
+                    return directAnswer;
+                }
+
                 return new AiSqlAgentResult
                 {
                     Analysis = "Өгөгдөл олдсонгүй.",
@@ -431,7 +437,7 @@ public class AiSqlAgentService : IAiSqlAgentService
     private static string NormalizeNameToken(string token)
     {
         var normalized = token.Trim().ToLowerInvariant();
-        foreach (var suffix in new[] { "giin", "iin", "iin", "yn", "gii", "ii", "iig" })
+        foreach (var suffix in new[] { "iin", "yn", "gii", "ii", "iig" })
         {
             if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
                 normalized.Length > suffix.Length + 1)
@@ -468,7 +474,7 @@ public class AiSqlAgentService : IAiSqlAgentService
         var stopWords = new[]
         {
             "ямар", "дугаартай", "дугаар", "утас", "байна", "вэ", "yu", "yamar",
-            "dugaartai", "dugaar", "utas", "baina", "be", "ve", "phone", "number",
+            "dugaartai", "dugaar", "utas", "baina", "be", "ve", "phone", "number", "giin",
             "what", "is", "the", "of", "hi", "sain", "uu"
         };
 
@@ -483,6 +489,7 @@ public class AiSqlAgentService : IAiSqlAgentService
 
     private async Task<string> GenerateSqlFromAiAsync(string question, string? previousSql = null, string? previousError = null)
     {
+        var entityHints = await BuildEntityHintsAsync(question);
         var systemPrompt = """
             You are an HR analytics SQL assistant.
             Generate PostgreSQL SELECT queries only. Return only SQL, no markdown and no explanation.
@@ -519,10 +526,19 @@ public class AiSqlAgentService : IAiSqlAgentService
             """;
 
         var prompt = string.IsNullOrWhiteSpace(previousSql)
-            ? question
+            ? $"""
+                User question:
+                {question}
+
+                Resolved entity hints from the live database:
+                {entityHints}
+                """
             : $"""
                 Original question:
                 {question}
+
+                Resolved entity hints from the live database:
+                {entityHints}
 
                 Your previous SQL failed:
                 {previousSql}
@@ -534,6 +550,75 @@ public class AiSqlAgentService : IAiSqlAgentService
                 """;
 
         return NormalizeSql(await GenerateChatTextAsync(systemPrompt, prompt, maxTokens: 700));
+    }
+
+    private async Task<string> BuildEntityHintsAsync(string question)
+    {
+        var normalized = question.Trim().ToLowerInvariant();
+        var tokens = ExtractEmployeeSearchTokens(normalized);
+        var hints = new List<string>();
+
+        if (tokens.Length > 0)
+        {
+            var employees = await _context.Employees
+                .AsNoTracking()
+                .Include(e => e.Department)
+                .Include(e => e.Position)
+                .OrderBy(e => e.EmployeeId)
+                .ToListAsync();
+
+            var matches = employees
+                .Select(e => new { Employee = e, Score = GetEmployeeMatchScore(e, tokens) })
+                .Where(x => x.Score.HasValue)
+                .OrderBy(x => x.Score)
+                .ThenBy(x => x.Employee.EmployeeId)
+                .Take(8)
+                .Select(x => x.Employee)
+                .ToList();
+
+            if (matches.Count > 0)
+            {
+                hints.Add("Employee candidates:");
+                hints.AddRange(matches.Select(e =>
+                    $"- EmployeeId={e.EmployeeId}, Name={e.FirstName} {e.LastName}, Department={e.Department.DepartmentName}, Position={e.Position.PositionName}, Phone={e.Phone ?? "-"}, Email={e.Email ?? "-"}"));
+            }
+        }
+
+        var departments = await _context.Departments
+            .AsNoTracking()
+            .OrderBy(d => d.DepartmentId)
+            .ToListAsync();
+        var departmentMatches = departments
+            .Where(d => normalized.Contains(d.DepartmentName.ToLowerInvariant()) ||
+                normalized.Contains(TransliterateMongolian(d.DepartmentName)) ||
+                DepartmentAliasMatches(normalized, d.DepartmentName))
+            .Take(5)
+            .ToList();
+
+        if (departmentMatches.Count > 0)
+        {
+            hints.Add("Department candidates:");
+            hints.AddRange(departmentMatches.Select(d => $"- DepartmentId={d.DepartmentId}, DepartmentName={d.DepartmentName}"));
+        }
+
+        return hints.Count == 0
+            ? "No specific employee or department was resolved. Use broad SQL with ILIKE where appropriate."
+            : string.Join("\n", hints);
+    }
+
+    private static bool DepartmentAliasMatches(string normalizedQuestion, string departmentName)
+    {
+        var aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HR"] = ["hr", "hunii", "noots"],
+            ["Finance"] = ["finance", "sanhuu", "sanhvv"],
+            ["IT"] = ["it", "medeellel", "technology"],
+            ["Sales"] = ["sales", "borluulalt"],
+            ["Operations"] = ["operations", "uil", "ajillagaa"]
+        };
+
+        return aliases.TryGetValue(departmentName, out var values) &&
+            values.Any(normalizedQuestion.Contains);
     }
 
     private async Task<string> GenerateAnalysisFromAiAsync(string question, SqlExecutionResult execution)
