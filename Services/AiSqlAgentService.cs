@@ -57,16 +57,7 @@ public class AiSqlAgentService : IAiSqlAgentService
 
         try
         {
-            var directAnswer = await TryAnswerDirectlyAsync(question);
-            if (directAnswer != null)
-            {
-                return directAnswer;
-            }
-
-            var sql = await GenerateSqlFromAiAsync(question);
-            ValidateSelectOnly(sql);
-
-            var execution = await ExecuteSqlAsync(sql, new Dictionary<string, object?>());
+            var (sql, execution) = await GenerateAndExecuteSqlWithRepairAsync(question);
             if (execution.Rows.Count == 0)
             {
                 return new AiSqlAgentResult
@@ -112,11 +103,45 @@ public class AiSqlAgentService : IAiSqlAgentService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error in AnswerAsync.");
+            var directAnswer = await TryAnswerDirectlyAsync(question);
+            if (directAnswer != null)
+            {
+                return directAnswer;
+            }
+
             return new AiSqlAgentResult
             {
                 Analysis = "Системд алдаа гарлаа. Админ руу мэдэгдэнэ үү."
             };
         }
+    }
+
+    private async Task<(string Sql, SqlExecutionResult Execution)> GenerateAndExecuteSqlWithRepairAsync(string question)
+    {
+        const int maxAttempts = 3;
+        string? previousSql = null;
+        string? previousError = null;
+        Exception? lastException = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var sql = await GenerateSqlFromAiAsync(question, previousSql, previousError);
+                previousSql = sql;
+                ValidateSelectOnly(sql);
+                var execution = await ExecuteSqlAsync(sql, new Dictionary<string, object?>());
+                return (sql, execution);
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                lastException = ex;
+                previousError = ex.Message;
+                _logger.LogWarning(ex, "AI SQL attempt {Attempt} failed. Asking AI to repair the query.", attempt);
+            }
+        }
+
+        throw lastException ?? new InvalidOperationException("AI SQL generation failed.");
     }
 
     private async Task<AiSqlAgentResult?> TryAnswerDirectlyAsync(string question)
@@ -220,7 +245,7 @@ public class AiSqlAgentService : IAiSqlAgentService
         return string.Join(' ', search.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 
-    private async Task<string> GenerateSqlFromAiAsync(string question)
+    private async Task<string> GenerateSqlFromAiAsync(string question, string? previousSql = null, string? previousError = null)
     {
         var systemPrompt = """
             You are an HR analytics SQL assistant.
@@ -228,6 +253,10 @@ public class AiSqlAgentService : IAiSqlAgentService
             Use quoted identifiers exactly as shown because table and column names are PascalCase.
             Do not use SQL Server syntax. Use LIMIT instead of TOP. Use COALESCE instead of ISNULL.
             Never modify data.
+            Understand Mongolian, English, and Mongolian Latin transliteration.
+            For person lookup questions, search "FirstName", "LastName", "Email", and "Phone" with ILIKE.
+            If the user types a common Latin Mongolian name, also search the obvious Cyrillic form when possible.
+            Example: "bat yamar dugaartai baina" should search for both 'bat' and 'Бат'.
 
             Available tables:
             "Employees"("EmployeeId","FirstName","LastName","DepartmentId","PositionId","Phone","Email","HireDate","IsActive","ManagerId")
@@ -250,7 +279,22 @@ public class AiSqlAgentService : IAiSqlAgentService
             For broad lists, add LIMIT 100.
             """;
 
-        return NormalizeSql(await GenerateChatTextAsync(systemPrompt, question, maxTokens: 700));
+        var prompt = string.IsNullOrWhiteSpace(previousSql)
+            ? question
+            : $"""
+                Original question:
+                {question}
+
+                Your previous SQL failed:
+                {previousSql}
+
+                Database error:
+                {previousError}
+
+                Return a corrected PostgreSQL SELECT query only.
+                """;
+
+        return NormalizeSql(await GenerateChatTextAsync(systemPrompt, prompt, maxTokens: 700));
     }
 
     private async Task<string> GenerateAnalysisFromAiAsync(string question, SqlExecutionResult execution)
