@@ -55,7 +55,7 @@ public class AiSqlAgentService : IAiSqlAgentService
             return new AiSqlAgentResult { Analysis = "Асуултаа бичээд дахин илгээнэ үү." };
         }
 
-        if (!IsLikelyDatabaseQuestion(question))
+        if (IsObviousGeneralQuestion(question))
         {
             return await AnswerGeneralQuestionAsync(question);
         }
@@ -88,6 +88,11 @@ public class AiSqlAgentService : IAiSqlAgentService
             if (directAnswer != null)
             {
                 return directAnswer;
+            }
+
+            if (!IsObviousGeneralQuestion(question))
+            {
+                return await AnswerGeneralQuestionAsync(question);
             }
 
             return new AiSqlAgentResult
@@ -201,24 +206,21 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
     }
 
-    private static bool IsLikelyDatabaseQuestion(string question)
+    private static bool IsObviousGeneralQuestion(string question)
     {
         var normalized = question.Trim().ToLowerInvariant();
-        var databaseKeywords = new[]
+        if (IsGreeting(question))
         {
-            "ажилтан", "ажилтны", "хэлтэс", "албан", "тушаал", "цалин", "ирц",
-            "гүйцэтгэл", "үнэлгээ", "утас", "дугаар", "имэйл", "орсон", "хоцрол",
-            "таслалт", "санхүү", "хүний", "нөөц", "мэдээлэл", "бүрэн",
-            "ajiltan", "ajiltnii", "heltes", "alban", "tushaal", "tsalin", "irts",
-            "guitsetgel", "unelgee", "utas", "dugaar", "dugaartai", "email",
-            "hotsrol", "taslalt", "sanhvv", "sanhuu", "hunii", "noots", "medeelel",
-            "buren", "medeelliig", "salary", "payroll", "attendance", "performance",
-            "department", "position", "employee", "phone", "mail", "late", "absent",
-            "manager", "review", "score", "count", "average", "avg", "total",
-            "highest", "lowest", "most", "least"
+            return true;
+        }
+
+        var generalOnlyPhrases = new[]
+        {
+            "bayarlalaa", "thanks", "thank you", "юу хийж чаддаг", "chi hen be",
+            "чи хэн бэ", "тусламж", "help", "яаж ашиглах", "how to use"
         };
 
-        return databaseKeywords.Any(normalized.Contains);
+        return generalOnlyPhrases.Any(normalized.Contains);
     }
 
     private static bool IsGreeting(string question)
@@ -484,13 +486,16 @@ public class AiSqlAgentService : IAiSqlAgentService
         var systemPrompt = """
             You are an HR analytics SQL assistant.
             Generate PostgreSQL SELECT queries only. Return only SQL, no markdown and no explanation.
+            Decide the needed tables and joins from the user's natural-language question.
             Use quoted identifiers exactly as shown because table and column names are PascalCase.
             Do not use SQL Server syntax. Use LIMIT instead of TOP. Use COALESCE instead of ISNULL.
             Never modify data.
             Understand Mongolian, English, and Mongolian Latin transliteration.
             For person lookup questions, search "FirstName", "LastName", "Email", and "Phone" with ILIKE.
-            If the user types a common Latin Mongolian name, also search the obvious Cyrillic form when possible.
-            Example: "bat yamar dugaartai baina" should search for both 'bat' and 'Бат'.
+            For Latin transliteration names, use ILIKE against both name columns and email; do not require exact spelling.
+            If the user asks for "full information", include employee name, department, position, phone, email, hire date, status, latest salary, attendance summary, and latest performance when possible.
+            If the user asks about "most late department", group Attendance where Status='Late' by department and order by count descending.
+            If the user asks average salary by a department, join Payroll -> Employees -> Departments and average "NetSalary".
 
             Available tables:
             "Employees"("EmployeeId","FirstName","LastName","DepartmentId","PositionId","Phone","Email","HireDate","IsActive","ManagerId")
@@ -633,9 +638,9 @@ public class AiSqlAgentService : IAiSqlAgentService
                     return text;
                 }
             }
-            catch (AiSqlAgentQuotaException)
+            catch (AiSqlAgentQuotaException ex)
             {
-                throw;
+                _logger.LogWarning(ex, "AI provider {Provider} quota/unavailable, trying next provider.", provider.Name);
             }
             catch (Exception ex)
             {
