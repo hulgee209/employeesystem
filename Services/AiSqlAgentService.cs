@@ -178,7 +178,9 @@ public class AiSqlAgentService : IAiSqlAgentService
         {
             try
             {
-                var text = await SendOpenAiCompatibleRequestAsync(provider, systemPrompt, userPrompt, maxTokens);
+                var text = provider.Kind == AiProviderKind.Gemini
+                    ? await SendGeminiRequestAsync(provider, systemPrompt, userPrompt, maxTokens)
+                    : await SendOpenAiCompatibleRequestAsync(provider, systemPrompt, userPrompt, maxTokens);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     return text;
@@ -245,15 +247,86 @@ public class AiSqlAgentService : IAiSqlAgentService
             .GetString();
     }
 
+    private async Task<string?> SendGeminiRequestAsync(
+        AiProvider provider,
+        string systemPrompt,
+        string userPrompt,
+        int maxTokens)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(90);
+
+        var endpoint = $"{provider.Endpoint.TrimEnd('/')}/v1beta/models/{Uri.EscapeDataString(provider.Model)}:generateContent?key={Uri.EscapeDataString(provider.ApiKey)}";
+        using var response = await client.PostAsJsonAsync(endpoint, new
+        {
+            systemInstruction = new
+            {
+                parts = new[] { new { text = systemPrompt } }
+            },
+            contents = new[]
+            {
+                new
+                {
+                    role = "user",
+                    parts = new[] { new { text = userPrompt } }
+                }
+            },
+            generationConfig = new
+            {
+                temperature = 0.1,
+                maxOutputTokens = maxTokens
+            }
+        });
+
+        var body = await response.Content.ReadAsStringAsync();
+
+        if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500)
+        {
+            throw new AiSqlAgentQuotaException($"{provider.Name} unavailable: {response.StatusCode}");
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(body);
+        if (!document.RootElement.TryGetProperty("candidates", out var candidates) ||
+            candidates.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var parts = candidates[0]
+            .GetProperty("content")
+            .GetProperty("parts");
+
+        return parts.EnumerateArray()
+            .Select(part => part.TryGetProperty("text", out var text) ? text.GetString() : null)
+            .FirstOrDefault(text => !string.IsNullOrWhiteSpace(text));
+    }
+
     private List<AiProvider> BuildProviders()
     {
         var providers = new List<AiProvider>();
+
+        var geminiKey = _configuration["GEMINI_API_KEY"] ??
+            _configuration["GEMINI_API_KEY_1"] ??
+            _configuration["GEMINI_API_KEY_2"] ??
+            _configuration["GEMINI_API_KEY_3"];
+        if (!string.IsNullOrWhiteSpace(geminiKey))
+        {
+            providers.Add(new AiProvider(
+                "Gemini",
+                AiProviderKind.Gemini,
+                "https://generativelanguage.googleapis.com",
+                geminiKey,
+                _configuration["GEMINI_MODEL"] ?? "gemini-3-pro"));
+        }
 
         var groqKey = _configuration["GROQ_API_KEY"];
         if (!string.IsNullOrWhiteSpace(groqKey))
         {
             providers.Add(new AiProvider(
                 "Groq",
+                AiProviderKind.OpenAiCompatible,
                 "https://api.groq.com/openai/v1/chat/completions",
                 groqKey,
                 _configuration["GROQ_MODEL"] ?? "llama-3.1-8b-instant"));
@@ -264,6 +337,7 @@ public class AiSqlAgentService : IAiSqlAgentService
         {
             providers.Add(new AiProvider(
                 "OpenRouter",
+                AiProviderKind.OpenAiCompatible,
                 "https://openrouter.ai/api/v1/chat/completions",
                 openRouterKey,
                 _configuration["OPENROUTER_MODEL"] ?? "meta-llama/llama-3.1-8b-instruct:free"));
@@ -359,7 +433,13 @@ public class AiSqlAgentService : IAiSqlAgentService
             .TrimEnd(';');
     }
 
-    private sealed record AiProvider(string Name, string Endpoint, string ApiKey, string Model);
+    private enum AiProviderKind
+    {
+        Gemini,
+        OpenAiCompatible
+    }
+
+    private sealed record AiProvider(string Name, AiProviderKind Kind, string Endpoint, string ApiKey, string Model);
 }
 
 public class SqlResponse

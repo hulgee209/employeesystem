@@ -24,6 +24,10 @@ services:
         value: "true"
       - key: Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command
         value: Warning
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3-pro
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
