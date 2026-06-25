@@ -49,7 +49,7 @@ async function askQuestion() {
 
         const data = await response.json();
 
-        if (data.sessionId && !currentSessionId) {
+        if (data.sessionId) {
             currentSessionId = data.sessionId;
         }
 

@@ -47,11 +47,9 @@ public class AIChatController : Controller
             {
                 session = await _context.ChatSessions
                     .FirstOrDefaultAsync(s => s.SessionId == request.SessionId.Value && s.UserId == userId);
-                
-                if (session == null)
-                    return BadRequest(new AIChatAnswerResponse("Session not found", null));
             }
-            else
+
+            if (session == null)
             {
                 // Create new session
                 session = new ChatSession

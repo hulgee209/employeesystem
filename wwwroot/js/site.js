@@ -30,6 +30,12 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const widgetSessionStorageKey =
+        'employeeSystem.aiWidget.currentSessionId';
+
+    let currentWidgetSessionId =
+        readStoredWidgetSessionId();
+
     button.addEventListener('click', function () {
         // Toggle the panel open/close
         const isOpen = panel.classList.contains('open');
@@ -110,7 +116,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        question: question
+                        question: question,
+                        sessionId: currentWidgetSessionId
                     })
                 });
 
@@ -118,9 +125,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 await response.json();
 
             typing.remove();
+
+            if (data.sessionId) {
+                setCurrentWidgetSession(data.sessionId);
+            }
             appendWidgetMessage(
                 'ai',
                 data.answer || 'Алдаа гарлаа. Дахин оролдоно уу.');
+            loadChatHistory();
         }
         catch {
             typing.remove();
@@ -261,7 +273,7 @@ document.addEventListener('DOMContentLoaded', function () {
             sessions.slice(0, 8).forEach(session => {
                 const item = document.createElement('button');
                 item.type = 'button';
-                item.className = `ai-widget-history-item${session.isPinned ? ' pinned' : ''}`;
+                item.className = `ai-widget-history-item${session.isPinned ? ' pinned' : ''}${currentWidgetSessionId === Number(session.sessionId) ? ' active' : ''}`;
                 item.textContent = session.title || `Session ${session.sessionId.substring(0, 8)}`;
                 item.title = session.title || session.sessionId;
                 item.dataset.sessionId = session.sessionId;
@@ -277,6 +289,8 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadSessionMessages(sessionId, activeItem) {
+        setCurrentWidgetSession(sessionId);
+
         // Mark item as active
         document.querySelectorAll('.ai-widget-history-item').forEach(item => item.classList.remove('active'));
         if (activeItem) activeItem.classList.add('active');
@@ -349,9 +363,40 @@ document.addEventListener('DOMContentLoaded', function () {
             if (item) {
                 item.remove();
             }
+            if (currentWidgetSessionId === Number(sessionId)) {
+                setCurrentWidgetSession(null);
+            }
             messages.innerHTML = '';
         } catch (error) {
             console.error('Failed to delete chat session:', error);
+        }
+    }
+
+    function readStoredWidgetSessionId() {
+        const stored =
+            window.localStorage.getItem(widgetSessionStorageKey);
+
+        const parsed =
+            Number(stored);
+
+        return Number.isInteger(parsed) && parsed > 0
+            ? parsed
+            : null;
+    }
+
+    function setCurrentWidgetSession(sessionId) {
+        const parsed =
+            Number(sessionId);
+
+        currentWidgetSessionId =
+            Number.isInteger(parsed) && parsed > 0
+                ? parsed
+                : null;
+
+        if (currentWidgetSessionId) {
+            window.localStorage.setItem(widgetSessionStorageKey, String(currentWidgetSessionId));
+        } else {
+            window.localStorage.removeItem(widgetSessionStorageKey);
         }
     }
 
