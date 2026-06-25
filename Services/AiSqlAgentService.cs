@@ -275,22 +275,14 @@ public class AiSqlAgentService : IAiSqlAgentService
             var allEmployees = await _context.Employees
                 .AsNoTracking()
                 .OrderBy(e => e.EmployeeId)
-                .Select(e => new
-                {
-                    e.FirstName,
-                    e.LastName,
-                    e.Phone,
-                    e.Email
-                })
                 .ToListAsync();
             var employees = allEmployees
-                .Where(e => tokens.Any(token =>
-                    ExpandNameToken(token).Any(alias =>
-                        e.FirstName.ToLowerInvariant().Contains(alias) ||
-                        e.LastName.ToLowerInvariant().Contains(alias) ||
-                        (e.Email != null && e.Email.ToLowerInvariant().Contains(alias)) ||
-                        (e.Phone != null && e.Phone.ToLowerInvariant().Contains(alias)))))
+                .Select(e => new { Employee = e, Score = GetEmployeeMatchScore(e, tokens) })
+                .Where(x => x.Score.HasValue)
+                .OrderBy(x => x.Score)
+                .ThenBy(x => x.Employee.EmployeeId)
                 .Take(5)
+                .Select(x => x.Employee)
                 .ToList();
 
             if (employees.Count == 0)
@@ -331,7 +323,13 @@ public class AiSqlAgentService : IAiSqlAgentService
             .OrderBy(e => e.EmployeeId)
             .ToListAsync();
 
-        var employee = employees.FirstOrDefault(e => tokens.Any(token => EmployeeMatchesToken(e, token)));
+        var employee = employees
+            .Select(e => new { Employee = e, Score = GetEmployeeMatchScore(e, tokens) })
+            .Where(x => x.Score.HasValue)
+            .OrderBy(x => x.Score)
+            .ThenBy(x => x.Employee.EmployeeId)
+            .Select(x => x.Employee)
+            .FirstOrDefault();
         if (employee == null)
         {
             return new AiSqlAgentResult { Analysis = "Тийм нэртэй ажилтан олдсонгүй." };
@@ -389,44 +387,49 @@ public class AiSqlAgentService : IAiSqlAgentService
 
     private static bool EmployeeMatchesToken(Employee employee, string token)
     {
-        var aliases = ExpandNameToken(token);
-        return aliases.Any(alias =>
-            employee.FirstName.ToLowerInvariant().Contains(alias) ||
-            employee.LastName.ToLowerInvariant().Contains(alias) ||
-            (employee.Email != null && employee.Email.ToLowerInvariant().Contains(alias)) ||
-            (employee.Phone != null && employee.Phone.ToLowerInvariant().Contains(alias)));
+        return GetEmployeeSearchValues(employee).Any(value => value.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IEnumerable<string> ExpandNameToken(string token)
+    private static int? GetEmployeeMatchScore(Employee employee, IEnumerable<string> tokens)
     {
-        yield return token;
+        int? bestScore = null;
+        var values = GetEmployeeSearchValues(employee).ToList();
 
-        var aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        foreach (var token in tokens)
         {
-            ["bat"] = ["бат"],
-            ["saruul"] = ["саруул"],
-            ["munkh"] = ["мөнх"],
-            ["monh"] = ["мөнх"],
-            ["enhjin"] = ["энхжин"],
-            ["enkhjin"] = ["энхжин"],
-            ["anujin"] = ["анужин"],
-            ["temuulen"] = ["тэмүүлэн"],
-            ["nomin"] = ["номин"]
-        };
+            var score =
+                values.Any(value => string.Equals(value, token, StringComparison.OrdinalIgnoreCase)) ? 0 :
+                values.Any(value => value.StartsWith(token, StringComparison.OrdinalIgnoreCase)) ? 1 :
+                values.Any(value => value.Contains(token, StringComparison.OrdinalIgnoreCase)) ? 2 :
+                (int?)null;
 
-        if (aliases.TryGetValue(token, out var tokenAliases))
-        {
-            foreach (var alias in tokenAliases)
+            if (score.HasValue && (!bestScore.HasValue || score.Value < bestScore.Value))
             {
-                yield return alias;
+                bestScore = score.Value;
             }
         }
+
+        return bestScore;
+    }
+
+    private static IEnumerable<string> GetEmployeeSearchValues(Employee employee)
+    {
+        yield return employee.FirstName.ToLowerInvariant();
+        yield return employee.LastName.ToLowerInvariant();
+        yield return TransliterateMongolian(employee.FirstName);
+        yield return TransliterateMongolian(employee.LastName);
+
+        if (!string.IsNullOrWhiteSpace(employee.Email))
+            yield return employee.Email.ToLowerInvariant();
+
+        if (!string.IsNullOrWhiteSpace(employee.Phone))
+            yield return employee.Phone.ToLowerInvariant();
     }
 
     private static string NormalizeNameToken(string token)
     {
         var normalized = token.Trim().ToLowerInvariant();
-        foreach (var suffix in new[] { "iin", "iin", "yn", "iin", "giin", "gii", "ii", "iig", "iin" })
+        foreach (var suffix in new[] { "giin", "iin", "iin", "yn", "gii", "ii", "iig" })
         {
             if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) &&
                 normalized.Length > suffix.Length + 1)
@@ -437,6 +440,25 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
 
         return normalized;
+    }
+
+    private static string TransliterateMongolian(string value)
+    {
+        var map = new Dictionary<char, string>
+        {
+            ['а'] = "a", ['б'] = "b", ['в'] = "v", ['г'] = "g", ['д'] = "d",
+            ['е'] = "e", ['ё'] = "yo", ['ж'] = "j", ['з'] = "z", ['и'] = "i",
+            ['й'] = "i", ['к'] = "k", ['л'] = "l", ['м'] = "m", ['н'] = "n",
+            ['о'] = "o", ['ө'] = "u", ['п'] = "p", ['р'] = "r", ['с'] = "s",
+            ['т'] = "t", ['у'] = "u", ['ү'] = "u", ['ф'] = "f", ['х'] = "h",
+            ['ц'] = "ts", ['ч'] = "ch", ['ш'] = "sh", ['щ'] = "sh", ['ъ'] = "",
+            ['ы'] = "i", ['ь'] = "", ['э'] = "e", ['ю'] = "yu", ['я'] = "ya"
+        };
+
+        var chars = value.ToLowerInvariant()
+            .Select(ch => map.TryGetValue(ch, out var latin) ? latin : ch.ToString());
+
+        return string.Concat(chars);
     }
 
     private static string ExtractEmployeeSearchText(string normalizedQuestion)
