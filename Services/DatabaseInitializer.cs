@@ -96,6 +96,7 @@ public static class DatabaseInitializer
     private static async Task SeedSampleDataAsync(EmployeeDbContext context)
     {
         await EnsureLookupDataAsync(context);
+        await NormalizeLookupDataAsync(context);
 
         var departmentIds = await context.Departments
             .OrderBy(d => d.DepartmentId)
@@ -124,7 +125,7 @@ public static class DatabaseInitializer
 
     private static async Task EnsureLookupDataAsync(EmployeeDbContext context)
     {
-        var departments = new[] { "HR", "Finance", "IT", "Sales", "Operations" };
+        var departments = new[] { "Хүний нөөц", "Санхүү", "Мэдээлэл технологи", "Борлуулалт", "Үйл ажиллагаа" };
         foreach (var departmentName in departments)
         {
             if (!await context.Departments.AnyAsync(d => d.DepartmentName == departmentName))
@@ -135,13 +136,13 @@ public static class DatabaseInitializer
 
         var positions = new[]
         {
-            "HR Manager",
-            "Accountant",
-            "Software Developer",
-            "System Administrator",
-            "Sales Manager",
-            "Operations Specialist",
-            "General Manager"
+            "HR менежер",
+            "Нягтлан бодогч",
+            "Програм хөгжүүлэгч",
+            "Системийн администратор",
+            "Борлуулалтын менежер",
+            "Үйл ажиллагааны мэргэжилтэн",
+            "Ерөнхий менежер"
         };
 
         foreach (var positionName in positions)
@@ -152,6 +153,110 @@ public static class DatabaseInitializer
             }
         }
 
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task NormalizeLookupDataAsync(EmployeeDbContext context)
+    {
+        var departmentAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HR"] = "Хүний нөөц",
+            ["Human Resource"] = "Хүний нөөц",
+            ["Human Resources"] = "Хүний нөөц",
+            ["Finance"] = "Санхүү",
+            ["IT"] = "Мэдээлэл технологи",
+            ["Information Technology"] = "Мэдээлэл технологи",
+            ["Sales"] = "Борлуулалт",
+            ["Operations"] = "Үйл ажиллагаа"
+        };
+
+        foreach (var alias in departmentAliases)
+        {
+            await MergeDepartmentAsync(context, alias.Key, alias.Value);
+        }
+
+        var positionAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HR Manager"] = "HR менежер",
+            ["Accountant"] = "Нягтлан бодогч",
+            ["Software Developer"] = "Програм хөгжүүлэгч",
+            ["System Administrator"] = "Системийн администратор",
+            ["Sales Manager"] = "Борлуулалтын менежер",
+            ["Operations Specialist"] = "Үйл ажиллагааны мэргэжилтэн",
+            ["General Manager"] = "Ерөнхий менежер"
+        };
+
+        foreach (var alias in positionAliases)
+        {
+            await MergePositionAsync(context, alias.Key, alias.Value);
+        }
+    }
+
+    private static async Task MergeDepartmentAsync(EmployeeDbContext context, string sourceName, string targetName)
+    {
+        var source = await context.Departments.FirstOrDefaultAsync(d => d.DepartmentName == sourceName);
+        if (source == null)
+        {
+            return;
+        }
+
+        var target = await context.Departments.FirstOrDefaultAsync(d => d.DepartmentName == targetName);
+        if (target == null)
+        {
+            source.DepartmentName = targetName;
+            await context.SaveChangesAsync();
+            return;
+        }
+
+        if (source.DepartmentId == target.DepartmentId)
+        {
+            return;
+        }
+
+        var employees = await context.Employees
+            .Where(e => e.DepartmentId == source.DepartmentId)
+            .ToListAsync();
+
+        foreach (var employee in employees)
+        {
+            employee.DepartmentId = target.DepartmentId;
+        }
+
+        context.Departments.Remove(source);
+        await context.SaveChangesAsync();
+    }
+
+    private static async Task MergePositionAsync(EmployeeDbContext context, string sourceName, string targetName)
+    {
+        var source = await context.Positions.FirstOrDefaultAsync(p => p.PositionName == sourceName);
+        if (source == null)
+        {
+            return;
+        }
+
+        var target = await context.Positions.FirstOrDefaultAsync(p => p.PositionName == targetName);
+        if (target == null)
+        {
+            source.PositionName = targetName;
+            await context.SaveChangesAsync();
+            return;
+        }
+
+        if (source.PositionId == target.PositionId)
+        {
+            return;
+        }
+
+        var employees = await context.Employees
+            .Where(e => e.PositionId == source.PositionId)
+            .ToListAsync();
+
+        foreach (var employee in employees)
+        {
+            employee.PositionId = target.PositionId;
+        }
+
+        context.Positions.Remove(source);
         await context.SaveChangesAsync();
     }
 

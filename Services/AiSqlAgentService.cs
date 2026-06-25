@@ -717,6 +717,11 @@ public class AiSqlAgentService : IAiSqlAgentService
     {
         var aliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
+            ["Хүний нөөц"] = ["hr", "human resource", "hunii", "noots"],
+            ["Санхүү"] = ["finance", "sanhuu", "sanhvv"],
+            ["Мэдээлэл технологи"] = ["it", "information technology", "medeellel", "technology"],
+            ["Борлуулалт"] = ["sales", "borluulalt"],
+            ["Үйл ажиллагаа"] = ["operations", "uil", "ajillagaa"],
             ["HR"] = ["hr", "hunii", "noots"],
             ["Finance"] = ["finance", "sanhuu", "sanhvv"],
             ["IT"] = ["it", "medeellel", "technology"],
