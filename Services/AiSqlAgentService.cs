@@ -541,15 +541,24 @@ public class AiSqlAgentService : IAiSqlAgentService
     {
         var providers = new List<AiProvider>();
 
-        var geminiKey = _configuration["GEMINI_API_KEY"] ??
-            _configuration["GEMINI_API_KEY_1"] ??
-            _configuration["GEMINI_API_KEY_2"] ??
-            _configuration["GEMINI_API_KEY_3"];
-        if (!string.IsNullOrWhiteSpace(geminiKey))
+        var configuredGeminiModel = _configuration["GEMINI_MODEL"] ?? "gemini-2.5-flash";
+        var geminiKeys = new[]
         {
-            var configuredGeminiModel = _configuration["GEMINI_MODEL"] ?? "gemini-2.5-flash";
+            _configuration["GEMINI_API_KEY"],
+            _configuration["GEMINI_API_KEY_1"],
+            _configuration["GEMINI_API_KEY_2"],
+            _configuration["GEMINI_API_KEY_3"]
+        }
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct()
+            .ToList();
+
+        for (var index = 0; index < geminiKeys.Count; index++)
+        {
+            var geminiKey = geminiKeys[index]!;
+            var providerName = index == 0 ? "Gemini" : $"Gemini key {index + 1}";
             providers.Add(new AiProvider(
-                "Gemini",
+                providerName,
                 AiProviderKind.Gemini,
                 "https://generativelanguage.googleapis.com",
                 geminiKey,
@@ -558,7 +567,7 @@ public class AiSqlAgentService : IAiSqlAgentService
             if (!string.Equals(configuredGeminiModel, "gemini-2.5-flash", StringComparison.OrdinalIgnoreCase))
             {
                 providers.Add(new AiProvider(
-                    "Gemini fallback",
+                    $"{providerName} fallback",
                     AiProviderKind.Gemini,
                     "https://generativelanguage.googleapis.com",
                     geminiKey,
