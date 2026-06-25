@@ -1,4 +1,5 @@
 using System.Data;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
@@ -14,10 +15,6 @@ public interface IAiSqlAgentService
     Task<AiSqlAgentResult> AnswerAsync(ClaimsPrincipal user, string question, int? employeeId = null);
 }
 
-/// <summary>
-/// Pure AI-driven SQL generation: ZERO hardcoded rules, ZERO keyword validation.
-/// Schema + question → AI thinks → SQL → result.
-/// </summary>
 public class AiSqlAgentService : IAiSqlAgentService
 {
     private static readonly string[] BlockedSqlTokens =
@@ -30,6 +27,7 @@ public class AiSqlAgentService : IAiSqlAgentService
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AiSqlAgentService> _logger;
     private readonly IMemoryCache _cache;
+    private readonly IConfiguration _configuration;
 
     public sealed class AiSqlAgentQuotaException : Exception
     {
@@ -40,17 +38,16 @@ public class AiSqlAgentService : IAiSqlAgentService
         EmployeeDbContext context,
         IHttpClientFactory httpClientFactory,
         ILogger<AiSqlAgentService> logger,
-        IMemoryCache cache)
+        IMemoryCache cache,
+        IConfiguration configuration)
     {
         _context = context;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
         _cache = cache;
+        _configuration = configuration;
     }
 
-    /// <summary>
-    /// Main entry point: question → AI backend → SQL → execute → result.
-    /// </summary>
     public async Task<AiSqlAgentResult> AnswerAsync(ClaimsPrincipal user, string question, int? employeeId = null)
     {
         if (string.IsNullOrWhiteSpace(question))
@@ -60,15 +57,10 @@ public class AiSqlAgentService : IAiSqlAgentService
 
         try
         {
-            // Let AI think about the question and generate SQL
             var sql = await GenerateSqlFromAiAsync(question);
-
-            // Validate SQL safety
             ValidateSelectOnly(sql);
 
-            // Execute the SQL
             var execution = await ExecuteSqlAsync(sql, new Dictionary<string, object?>());
-
             if (execution.Rows.Count == 0)
             {
                 return new AiSqlAgentResult
@@ -78,9 +70,7 @@ public class AiSqlAgentService : IAiSqlAgentService
                 };
             }
 
-            // Get 1-2 sentence analysis in Mongolian
             var analysis = await GenerateAnalysisFromAiAsync(question, execution);
-
             return new AiSqlAgentResult
             {
                 Sql = sql,
@@ -91,15 +81,15 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogWarning(ex, "HTTP request failed while contacting AI backend.");
+            _logger.LogWarning(ex, "HTTP request failed while contacting AI provider.");
             return new AiSqlAgentResult
             {
-                Analysis = "AI үйлчилгээтэй холбогдож чадсангүй. FastAPI/Gemini серверийн холболтыг шалгаа."
+                Analysis = "AI үйлчилгээтэй холбогдож чадсангүй. Render Environment дээр AI API key тохирсон эсэхийг шалгана уу."
             };
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogWarning(ex, "Timeout occurred contacting AI backend.");
+            _logger.LogWarning(ex, "Timeout occurred contacting AI provider.");
             return new AiSqlAgentResult
             {
                 Analysis = "AI үйлчилгээ хариу өгөхөд удаан байна. Дахин оролдоно уу."
@@ -110,7 +100,7 @@ public class AiSqlAgentService : IAiSqlAgentService
             _logger.LogWarning(ex, "AI provider quota or service unavailable.");
             return new AiSqlAgentResult
             {
-                Analysis = "Таны асуултыг одоогоор боловсруулах боломжгүй. AI үйлчилгээ түр боломжгүй. Дахин оролдоно уу."
+                Analysis = "AI үйлчилгээ түр боломжгүй байна. API quota эсвэл model тохиргоог шалгаад дахин оролдоно уу."
             };
         }
         catch (Exception ex)
@@ -123,89 +113,51 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
     }
 
-    /// <summary>
-    /// Call Python backend to generate SQL from question.
-    /// </summary>
     private async Task<string> GenerateSqlFromAiAsync(string question)
     {
-        const int maxAttempts = 3;
-        var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(120);
+        var systemPrompt = """
+            You are an HR analytics SQL assistant.
+            Generate PostgreSQL SELECT queries only. Return only SQL, no markdown and no explanation.
+            Use quoted identifiers exactly as shown because table and column names are PascalCase.
+            Do not use SQL Server syntax. Use LIMIT instead of TOP. Use COALESCE instead of ISNULL.
+            Never modify data.
 
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                var response = await client.PostAsJsonAsync(
-                    "http://127.0.0.1:8000/sql-agent",
-                    new { question });
+            Available tables:
+            "Employees"("EmployeeId","FirstName","LastName","DepartmentId","PositionId","Phone","Email","HireDate","IsActive","ManagerId")
+            "Departments"("DepartmentId","DepartmentName")
+            "Positions"("PositionId","PositionName")
+            "Attendance"("AttendanceId","EmployeeId","AttendanceDate","CheckInTime","CheckOutTime","Status")
+            "Payroll"("PayrollId","EmployeeId","PayMonth","Salary","Bonus","Deduction","NetSalary")
+            "PerformanceReviews"("ReviewId","EmployeeId","ReviewDate","Score","Comments")
+            "Users"("UserId","Username","PasswordHash","EmployeeId","IsActive")
+            "Roles"("RoleId","RoleName")
+            "UserRoles"("UserRoleId","UserId","RoleId")
 
-                if (response.IsSuccessStatusCode)
-                {
-                    var payload = await response.Content.ReadFromJsonAsync<SqlResponse>();
-                    if (payload?.Sql != null)
-                    {
-                        var sql = NormalizeSql(payload.Sql);
-                        _logger.LogInformation("AI generated SQL: {Sql}", sql.Substring(0, Math.Min(100, sql.Length)));
-                        return sql;
-                    }
-                }
+            Useful joins:
+            "Employees"."DepartmentId" = "Departments"."DepartmentId"
+            "Employees"."PositionId" = "Positions"."PositionId"
+            "Attendance"."EmployeeId" = "Employees"."EmployeeId"
+            "Payroll"."EmployeeId" = "Employees"."EmployeeId"
+            "PerformanceReviews"."EmployeeId" = "Employees"."EmployeeId"
 
-                var error = await response.Content.ReadAsStringAsync();
-                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests ||
-                    response.StatusCode == System.Net.HttpStatusCode.BadGateway ||
-                    response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable ||
-                    error.Contains("quota", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (attempt == maxAttempts)
-                    {
-                        throw new AiSqlAgentQuotaException("AI service quota exceeded or unavailable.");
-                    }
+            For broad lists, add LIMIT 100.
+            """;
 
-                    var backoff = TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1));
-                    await Task.Delay(backoff);
-                    continue;
-                }
-
-                throw new InvalidOperationException($"AI backend error: {error}");
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                _logger.LogWarning(ex, "SQL generation attempt {Attempt} failed, retrying...", attempt);
-                await Task.Delay(TimeSpan.FromMilliseconds(500));
-            }
-        }
-
-        throw new AiSqlAgentQuotaException("Failed to generate SQL after all attempts.");
+        return NormalizeSql(await GenerateChatTextAsync(systemPrompt, question, maxTokens: 700));
     }
 
-    /// <summary>
-    /// Call Python backend to generate 1-2 sentence Mongolian analysis.
-    /// </summary>
     private async Task<string> GenerateAnalysisFromAiAsync(string question, SqlExecutionResult execution)
     {
-        var client = _httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(60);
-
         try
         {
             var resultJson = JsonSerializer.Serialize(execution.Rows.Take(100));
-            var response = await client.PostAsJsonAsync(
-                "http://127.0.0.1:8000/sql-analysis",
-                new { question, results = resultJson });
-
-            if (response.IsSuccessStatusCode)
-            {
-                var payload = await response.Content.ReadFromJsonAsync<AnalysisResponse>();
-                if (payload?.Analysis != null)
-                {
-                    _logger.LogInformation("AI analysis: {Analysis}", payload.Analysis.Substring(0, Math.Min(80, payload.Analysis.Length)));
-                    return payload.Analysis;
-                }
-            }
-
-            _logger.LogWarning("Analysis generation failed, returning fallback.");
-            return "Үр дүн амжилттай боловсруулагдсан.";
+            var systemPrompt = """
+                You are an HR analytics assistant.
+                Explain the SQL result in Mongolian in 1-3 concise sentences.
+                Do not mention raw SQL unless the user asks.
+                """;
+            var userPrompt = $"Question: {question}\nResult JSON: {resultJson}";
+            return await GenerateChatTextAsync(systemPrompt, userPrompt, maxTokens: 500);
         }
         catch (Exception ex)
         {
@@ -214,9 +166,112 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
     }
 
-    /// <summary>
-    /// Execute SQL query and return results.
-    /// </summary>
+    private async Task<string> GenerateChatTextAsync(string systemPrompt, string userPrompt, int maxTokens)
+    {
+        var providers = BuildProviders();
+        if (providers.Count == 0)
+        {
+            throw new HttpRequestException("No AI provider API key is configured.");
+        }
+
+        foreach (var provider in providers)
+        {
+            try
+            {
+                var text = await SendOpenAiCompatibleRequestAsync(provider, systemPrompt, userPrompt, maxTokens);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+            catch (AiSqlAgentQuotaException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI provider {Provider} failed, trying next provider.", provider.Name);
+            }
+        }
+
+        throw new AiSqlAgentQuotaException("All configured AI providers failed.");
+    }
+
+    private async Task<string?> SendOpenAiCompatibleRequestAsync(
+        AiProvider provider,
+        string systemPrompt,
+        string userPrompt,
+        int maxTokens)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(90);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, provider.Endpoint);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", provider.ApiKey);
+
+        if (provider.Name.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
+        {
+            request.Headers.TryAddWithoutValidation("HTTP-Referer", "https://employeesystem-xba0.onrender.com");
+            request.Headers.TryAddWithoutValidation("X-Title", "EmployeeSystem");
+        }
+
+        request.Content = JsonContent.Create(new
+        {
+            model = provider.Model,
+            messages = new[]
+            {
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userPrompt }
+            },
+            temperature = 0.1,
+            max_tokens = maxTokens
+        });
+
+        using var response = await client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500)
+        {
+            throw new AiSqlAgentQuotaException($"{provider.Name} unavailable: {response.StatusCode}");
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString();
+    }
+
+    private List<AiProvider> BuildProviders()
+    {
+        var providers = new List<AiProvider>();
+
+        var groqKey = _configuration["GROQ_API_KEY"];
+        if (!string.IsNullOrWhiteSpace(groqKey))
+        {
+            providers.Add(new AiProvider(
+                "Groq",
+                "https://api.groq.com/openai/v1/chat/completions",
+                groqKey,
+                _configuration["GROQ_MODEL"] ?? "llama-3.1-8b-instant"));
+        }
+
+        var openRouterKey = _configuration["OPENROUTER_API_KEY"];
+        if (!string.IsNullOrWhiteSpace(openRouterKey))
+        {
+            providers.Add(new AiProvider(
+                "OpenRouter",
+                "https://openrouter.ai/api/v1/chat/completions",
+                openRouterKey,
+                _configuration["OPENROUTER_MODEL"] ?? "meta-llama/llama-3.1-8b-instruct:free"));
+        }
+
+        return providers;
+    }
+
     private async Task<SqlExecutionResult> ExecuteSqlAsync(string sql, Dictionary<string, object?> sqlParameters)
     {
         var result = new SqlExecutionResult
@@ -225,66 +280,63 @@ public class AiSqlAgentService : IAiSqlAgentService
             Rows = new List<Dictionary<string, object?>>()
         };
 
+        var connection = _context.Database.GetDbConnection();
+        var closeConnection = connection.State != ConnectionState.Open;
+
         try
         {
-            var connection = _context.Database.GetDbConnection();
-            await connection.OpenAsync();
-
-            using (var command = connection.CreateCommand())
+            if (closeConnection)
             {
-                command.CommandText = sql;
-                command.CommandTimeout = 60;
-
-                foreach (var kvp in sqlParameters)
-                {
-                    var param = command.CreateParameter();
-                    param.ParameterName = kvp.Key;
-                    param.Value = kvp.Value ?? DBNull.Value;
-                    command.Parameters.Add(param);
-                }
-
-                using (var reader = await command.ExecuteReaderAsync())
-                {
-                    // Read column names
-                    for (int i = 0; i < reader.FieldCount; i++)
-                    {
-                        result.Columns.Add(reader.GetName(i));
-                    }
-
-                    // Read rows (limit to 500 for safety)
-                    int rowCount = 0;
-                    while (await reader.ReadAsync() && rowCount < 500)
-                    {
-                        var row = new Dictionary<string, object?>();
-                        for (int i = 0; i < reader.FieldCount; i++)
-                        {
-                            row[result.Columns[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-                        }
-                        result.Rows.Add(row);
-                        rowCount++;
-                    }
-                }
+                await connection.OpenAsync();
             }
 
-            await connection.CloseAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            command.CommandTimeout = 60;
+
+            foreach (var kvp in sqlParameters)
+            {
+                var param = command.CreateParameter();
+                param.ParameterName = kvp.Key;
+                param.Value = kvp.Value ?? DBNull.Value;
+                command.Parameters.Add(param);
+            }
+
+            await using var reader = await command.ExecuteReaderAsync();
+            for (var i = 0; i < reader.FieldCount; i++)
+            {
+                result.Columns.Add(reader.GetName(i));
+            }
+
+            var rowCount = 0;
+            while (await reader.ReadAsync() && rowCount < 500)
+            {
+                var row = new Dictionary<string, object?>();
+                for (var i = 0; i < reader.FieldCount; i++)
+                {
+                    row[result.Columns[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                }
+
+                result.Rows.Add(row);
+                rowCount++;
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "SQL execution failed.");
-            throw;
+            if (closeConnection)
+            {
+                await connection.CloseAsync();
+            }
         }
 
         return result;
     }
 
-    /// <summary>
-    /// Ensure SQL is SELECT-only (no DML/DDL).
-    /// </summary>
     private static void ValidateSelectOnly(string sql)
     {
         var normalized = sql.Trim().ToUpperInvariant();
 
-        if (!normalized.StartsWith("SELECT"))
+        if (!normalized.StartsWith("SELECT") && !normalized.StartsWith("WITH"))
         {
             throw new InvalidOperationException("SQL must be a SELECT query.");
         }
@@ -301,14 +353,15 @@ public class AiSqlAgentService : IAiSqlAgentService
     private static string NormalizeSql(string sql)
     {
         return sql
-            .Replace("```sql", "")
+            .Replace("```sql", "", StringComparison.OrdinalIgnoreCase)
             .Replace("```", "")
             .Trim()
             .TrimEnd(';');
     }
+
+    private sealed record AiProvider(string Name, string Endpoint, string ApiKey, string Model);
 }
 
-// Pydantic model from Python backend
 public class SqlResponse
 {
     public string Sql { get; set; } = string.Empty;
