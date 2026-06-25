@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: employeesystem
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ApplyMigrations
+        value: "true"
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
