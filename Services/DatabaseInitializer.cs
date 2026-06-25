@@ -28,7 +28,8 @@ public static class DatabaseInitializer
             await SeedDefaultUsersAsync(context, configuration);
         }
 
-        if (configuration.GetValue<bool>("SeedSampleData"))
+        if (configuration.GetValue<bool>("SeedSampleData") ||
+            configuration.GetValue<bool>("SeedDefaultUsers"))
         {
             await SeedSampleDataAsync(context);
         }
