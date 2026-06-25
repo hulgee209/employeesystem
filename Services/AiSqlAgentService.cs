@@ -313,12 +313,23 @@ public class AiSqlAgentService : IAiSqlAgentService
             _configuration["GEMINI_API_KEY_3"];
         if (!string.IsNullOrWhiteSpace(geminiKey))
         {
+            var configuredGeminiModel = _configuration["GEMINI_MODEL"] ?? "gemini-2.5-flash";
             providers.Add(new AiProvider(
                 "Gemini",
                 AiProviderKind.Gemini,
                 "https://generativelanguage.googleapis.com",
                 geminiKey,
-                _configuration["GEMINI_MODEL"] ?? "gemini-3-pro"));
+                configuredGeminiModel));
+
+            if (!string.Equals(configuredGeminiModel, "gemini-2.5-flash", StringComparison.OrdinalIgnoreCase))
+            {
+                providers.Add(new AiProvider(
+                    "Gemini fallback",
+                    AiProviderKind.Gemini,
+                    "https://generativelanguage.googleapis.com",
+                    geminiKey,
+                    "gemini-2.5-flash"));
+            }
         }
 
         var groqKey = _configuration["GROQ_API_KEY"];
