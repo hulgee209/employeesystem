@@ -125,6 +125,9 @@ public class DashboardService : IDashboardService
     public async Task<EmployeeDashboardViewModel> GetEmployeeDashboardAsync(int employeeId)
     {
         var employee = await _context.Employees
+            .AsNoTracking()
+            .Include(e => e.Department)
+            .Include(e => e.Position)
             .Where(e => e.EmployeeId == employeeId)
             .FirstOrDefaultAsync();
 

@@ -231,7 +231,9 @@ namespace EmployeeSystem.Controllers
                 !roleNames.Contains("HR"))
             {
                 fallbackEmployeeId = await _context.Employees
-                    .Where(e => e.Position.PositionName.Contains("Manager"))
+                    .Where(e =>
+                        e.Position.PositionName.Contains("Manager") ||
+                        e.Position.PositionName.Contains("менежер"))
                     .OrderBy(e => e.EmployeeId)
                     .Select(e => (int?)e.EmployeeId)
                     .FirstOrDefaultAsync();
