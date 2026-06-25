@@ -20,6 +20,8 @@ services:
         value: Postgres
       - key: SeedDefaultUsers
         value: "true"
+      - key: SeedSampleData
+        value: "true"
       - key: ConnectionStrings__DefaultConnection
         fromDatabase:
           name: employeesystem-db
