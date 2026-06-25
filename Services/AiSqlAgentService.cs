@@ -55,6 +55,11 @@ public class AiSqlAgentService : IAiSqlAgentService
             return new AiSqlAgentResult { Analysis = "Асуултаа бичээд дахин илгээнэ үү." };
         }
 
+        if (!IsLikelyDatabaseQuestion(question))
+        {
+            return await AnswerGeneralQuestionAsync(question);
+        }
+
         try
         {
             var (sql, execution) = await GenerateAndExecuteSqlWithRepairAsync(question);
@@ -79,6 +84,12 @@ public class AiSqlAgentService : IAiSqlAgentService
         catch (HttpRequestException ex)
         {
             _logger.LogWarning(ex, "HTTP request failed while contacting AI provider.");
+            var directAnswer = await TryAnswerDirectlyAsync(question);
+            if (directAnswer != null)
+            {
+                return directAnswer;
+            }
+
             return new AiSqlAgentResult
             {
                 Analysis = "AI үйлчилгээтэй холбогдож чадсангүй. Render Environment дээр AI API key тохирсон эсэхийг шалгана уу."
@@ -87,6 +98,12 @@ public class AiSqlAgentService : IAiSqlAgentService
         catch (TaskCanceledException ex)
         {
             _logger.LogWarning(ex, "Timeout occurred contacting AI provider.");
+            var directAnswer = await TryAnswerDirectlyAsync(question);
+            if (directAnswer != null)
+            {
+                return directAnswer;
+            }
+
             return new AiSqlAgentResult
             {
                 Analysis = "AI үйлчилгээ хариу өгөхөд удаан байна. Дахин оролдоно уу."
@@ -95,6 +112,12 @@ public class AiSqlAgentService : IAiSqlAgentService
         catch (AiSqlAgentQuotaException ex)
         {
             _logger.LogWarning(ex, "AI provider quota or service unavailable.");
+            var directAnswer = await TryAnswerDirectlyAsync(question);
+            if (directAnswer != null)
+            {
+                return directAnswer;
+            }
+
             return new AiSqlAgentResult
             {
                 Analysis = "AI үйлчилгээ түр боломжгүй байна. API quota эсвэл model тохиргоог шалгаад дахин оролдоно уу."
@@ -142,6 +165,66 @@ public class AiSqlAgentService : IAiSqlAgentService
         }
 
         throw lastException ?? new InvalidOperationException("AI SQL generation failed.");
+    }
+
+    private async Task<AiSqlAgentResult> AnswerGeneralQuestionAsync(string question)
+    {
+        try
+        {
+            var systemPrompt = """
+                You are a helpful assistant inside an employee management system.
+                The user's question is not asking for database data.
+                Answer naturally in Mongolian unless the user clearly uses another language.
+                Do not generate SQL.
+                Keep the answer concise.
+                """;
+
+            var answer = await GenerateChatTextAsync(systemPrompt, question, maxTokens: 500);
+            return new AiSqlAgentResult { Analysis = answer };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "General AI answer failed.");
+
+            if (IsGreeting(question))
+            {
+                return new AiSqlAgentResult
+                {
+                    Analysis = "Сайн байна уу? HR болон ажилтны мэдээлэлтэй холбоотой асуултаа бичээрэй."
+                };
+            }
+
+            return new AiSqlAgentResult
+            {
+                Analysis = "AI үйлчилгээ түр боломжгүй байна. Дахин оролдоно уу."
+            };
+        }
+    }
+
+    private static bool IsLikelyDatabaseQuestion(string question)
+    {
+        var normalized = question.Trim().ToLowerInvariant();
+        var databaseKeywords = new[]
+        {
+            "ажилтан", "ажилтны", "хэлтэс", "албан", "тушаал", "цалин", "ирц",
+            "гүйцэтгэл", "үнэлгээ", "утас", "дугаар", "имэйл", "орсон", "хоцрол",
+            "таслалт", "санхүү", "хүний", "нөөц", "мэдээлэл", "бүрэн",
+            "ajiltan", "ajiltnii", "heltes", "alban", "tushaal", "tsalin", "irts",
+            "guitsetgel", "unelgee", "utas", "dugaar", "dugaartai", "email",
+            "hotsrol", "taslalt", "sanhvv", "sanhuu", "hunii", "noots", "medeelel",
+            "buren", "medeelliig", "salary", "payroll", "attendance", "performance",
+            "department", "position", "employee", "phone", "mail", "late", "absent",
+            "manager", "review", "score", "count", "average", "avg", "total",
+            "highest", "lowest", "most", "least"
+        };
+
+        return databaseKeywords.Any(normalized.Contains);
+    }
+
+    private static bool IsGreeting(string question)
+    {
+        var normalized = question.Trim().ToLowerInvariant();
+        return normalized is "hi" or "hello" or "hey" or "sain uu" or "сайн уу" or "сайн байна уу";
     }
 
     private async Task<AiSqlAgentResult?> TryAnswerDirectlyAsync(string question)
