@@ -181,8 +181,10 @@ public static class DatabaseInitializer
             ["Accountant"] = "Нягтлан бодогч",
             ["Software Developer"] = "Програм хөгжүүлэгч",
             ["System Administrator"] = "Системийн администратор",
+            ["Системийн админ"] = "Системийн администратор",
             ["Sales Manager"] = "Борлуулалтын менежер",
             ["Operations Specialist"] = "Үйл ажиллагааны мэргэжилтэн",
+            ["Үйл ажиллагааны ажилтан"] = "Үйл ажиллагааны мэргэжилтэн",
             ["General Manager"] = "Ерөнхий менежер"
         };
 
