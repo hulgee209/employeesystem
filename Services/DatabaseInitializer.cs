@@ -8,6 +8,7 @@ public static class DatabaseInitializer
 {
     private const int TargetSampleEmployeeCount = 5000;
     private const int BatchSize = 500;
+    private const int TargetManagerTeamSize = 6;
 
     public static async Task InitializeAsync(IServiceProvider services, IConfiguration configuration)
     {
@@ -109,6 +110,7 @@ public static class DatabaseInitializer
 
         var managerEmployeeId = await EnsureManagerEmployeeAsync(context, departmentIds, positionIds);
         await TopUpEmployeesAsync(context, managerEmployeeId, departmentIds, positionIds);
+        await NormalizeManagerTeamAsync(context, managerEmployeeId);
 
         var employeeIds = await context.Employees
             .OrderBy(e => e.EmployeeId)
@@ -319,7 +321,7 @@ public static class DatabaseInitializer
                 Phone = $"99{number:D6}",
                 Email = $"employee{number:D4}@example.com",
                 HireDate = new DateOnly(2020 + number % 5, number % 12 + 1, number % 27 + 1),
-                ManagerId = managerEmployeeId,
+                ManagerId = number <= TargetManagerTeamSize + 1 ? managerEmployeeId : null,
                 IsActive = number % 20 != 0
             });
 
@@ -336,6 +338,26 @@ public static class DatabaseInitializer
             context.Employees.AddRange(batch);
             await context.SaveChangesAsync();
         }
+    }
+
+    private static async Task NormalizeManagerTeamAsync(EmployeeDbContext context, int managerEmployeeId)
+    {
+        var directReports = await context.Employees
+            .Where(e => e.ManagerId == managerEmployeeId)
+            .OrderBy(e => e.EmployeeId)
+            .ToListAsync();
+
+        if (directReports.Count <= TargetManagerTeamSize)
+        {
+            return;
+        }
+
+        foreach (var employee in directReports.Skip(TargetManagerTeamSize))
+        {
+            employee.ManagerId = null;
+        }
+
+        await context.SaveChangesAsync();
     }
 
     private static async Task SeedRelatedDataForMissingEmployeesAsync(
