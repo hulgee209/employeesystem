@@ -26,6 +26,7 @@ namespace EmployeeSystem.Controllers
 
         [AllowAnonymous]
         [HttpGet]
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public IActionResult Login(string? returnUrl = null)
         {
             if (User.Identity?.IsAuthenticated == true)
@@ -46,6 +47,7 @@ namespace EmployeeSystem.Controllers
         [AllowAnonymous]
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public async Task<IActionResult> Login(LoginViewModel model)
         {
             if (!ModelState.IsValid)
@@ -135,10 +137,18 @@ namespace EmployeeSystem.Controllers
         [Authorize]
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
         public async Task<IActionResult> Logout()
         {
             await HttpContext.SignOutAsync(
                 CookieAuthenticationDefaults.AuthenticationScheme);
+
+            Response.Cookies.Delete(RememberedUsernameCookie);
+            Response.Cookies.Delete("EmployeeSystem.Auth");
+            Response.Cookies.Delete(".AspNetCore.Cookies");
+            Response.Headers.CacheControl = "no-store, no-cache, must-revalidate, max-age=0";
+            Response.Headers.Pragma = "no-cache";
+            Response.Headers.Expires = "0";
 
             return RedirectToAction(nameof(Login));
         }
