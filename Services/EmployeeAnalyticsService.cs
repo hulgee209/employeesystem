@@ -1,7 +1,7 @@
 ﻿using System.Data;
+using System.Data.Common;
 using System.Security.Claims;
 using EmployeeSystem.Models;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace EmployeeSystem.Services;
@@ -736,8 +736,10 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                 return parameter.ParameterName;
             });
 
-            var aggregation = string.IsNullOrWhiteSpace(sumColumn) ? "COUNT(1)" : $"SUM(ISNULL([{sumColumn}], 0))";
-            command.CommandText = $"SELECT [{employeeColumn}], CAST({aggregation} AS int) FROM [{table}] WHERE [{employeeColumn}] IN ({string.Join(",", parameters)}) GROUP BY [{employeeColumn}]";
+            var tableName = QuoteIdentifier(table);
+            var employeeName = QuoteIdentifier(employeeColumn);
+            var aggregation = string.IsNullOrWhiteSpace(sumColumn) ? "COUNT(1)" : $"SUM(COALESCE({QuoteIdentifier(sumColumn)}, 0))";
+            command.CommandText = $"SELECT {employeeName}, CAST({aggregation} AS int) FROM {tableName} WHERE {employeeName} IN ({string.Join(",", parameters)}) GROUP BY {employeeName}";
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -746,7 +748,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                     reader.IsDBNull(1) ? 0 : Convert.ToInt32(reader.GetValue(1));
             }
         }
-        catch (SqlException)
+        catch (DbException)
         {
             return result;
         }
@@ -773,16 +775,28 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
             employeeParameter.ParameterName = "@employeeId";
             employeeParameter.Value = employeeId;
             command.Parameters.Add(employeeParameter);
-            command.CommandText = $"""
-                SELECT TOP 50
-                    CAST([{titleColumn}] AS nvarchar(200)) AS Title,
-                    {(statusColumn == null ? "NULL" : $"CAST([{statusColumn}] AS nvarchar(200))")} AS Status,
-                    {(dateColumn == null ? "NULL" : $"CAST([{dateColumn}] AS nvarchar(200))")} AS DateText,
-                    {(detailColumn == null ? "NULL" : $"CAST([{detailColumn}] AS nvarchar(400))")} AS Detail
-                FROM [{table}]
-                WHERE [EmployeeId] = @employeeId
-                ORDER BY 1 DESC
-                """;
+            command.CommandText = IsPostgres()
+                ? $"""
+                    SELECT
+                        {CastAsText(titleColumn, 200)} AS Title,
+                        {(statusColumn == null ? "NULL" : CastAsText(statusColumn, 200))} AS Status,
+                        {(dateColumn == null ? "NULL" : CastAsText(dateColumn, 200))} AS DateText,
+                        {(detailColumn == null ? "NULL" : CastAsText(detailColumn, 400))} AS Detail
+                    FROM {QuoteIdentifier(table)}
+                    WHERE {QuoteIdentifier("EmployeeId")} = @employeeId
+                    ORDER BY 1 DESC
+                    LIMIT 50
+                    """
+                : $"""
+                    SELECT TOP 50
+                        {CastAsText(titleColumn, 200)} AS Title,
+                        {(statusColumn == null ? "NULL" : CastAsText(statusColumn, 200))} AS Status,
+                        {(dateColumn == null ? "NULL" : CastAsText(dateColumn, 200))} AS DateText,
+                        {(detailColumn == null ? "NULL" : CastAsText(detailColumn, 400))} AS Detail
+                    FROM {QuoteIdentifier(table)}
+                    WHERE {QuoteIdentifier("EmployeeId")} = @employeeId
+                    ORDER BY 1 DESC
+                    """;
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -796,7 +810,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                 });
             }
         }
-        catch (SqlException)
+        catch (DbException)
         {
             return items;
         }
@@ -817,7 +831,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
             parameter.ParameterName = "@employeeId";
             parameter.Value = employeeId;
             command.Parameters.Add(parameter);
-            command.CommandText = $"SELECT CAST([{groupColumn}] AS nvarchar(200)), COUNT(1) FROM [{table}] WHERE [EmployeeId] = @employeeId GROUP BY [{groupColumn}]";
+            command.CommandText = $"SELECT {CastAsText(groupColumn, 200)}, COUNT(1) FROM {QuoteIdentifier(table)} WHERE {QuoteIdentifier("EmployeeId")} = @employeeId GROUP BY {QuoteIdentifier(groupColumn)}";
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -829,7 +843,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                 });
             }
         }
-        catch (SqlException)
+        catch (DbException)
         {
             return result;
         }
@@ -846,7 +860,9 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
             var connection = _context.Database.GetDbConnection();
             await using var _ = await OpenConnectionAsync();
             await using var command = connection.CreateCommand();
-            command.CommandText = $"SELECT TOP 8 CAST([{groupColumn}] AS nvarchar(200)), COUNT(1) FROM [{table}] GROUP BY [{groupColumn}] ORDER BY COUNT(1) DESC";
+            command.CommandText = IsPostgres()
+                ? $"SELECT {CastAsText(groupColumn, 200)}, COUNT(1) FROM {QuoteIdentifier(table)} GROUP BY {QuoteIdentifier(groupColumn)} ORDER BY COUNT(1) DESC LIMIT 8"
+                : $"SELECT TOP 8 {CastAsText(groupColumn, 200)}, COUNT(1) FROM {QuoteIdentifier(table)} GROUP BY {QuoteIdentifier(groupColumn)} ORDER BY COUNT(1) DESC";
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
@@ -858,7 +874,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                 });
             }
         }
-        catch (SqlException)
+        catch (DbException)
         {
             return result;
         }
@@ -916,10 +932,10 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
             });
 
             command.CommandText = $"""
-                SELECT [EmployeeId], CAST(SUM(ISNULL([Days], 0)) AS int)
-                FROM [LeaveRequests]
-                WHERE [EmployeeId] IN ({string.Join(",", parameters)})
-                GROUP BY [EmployeeId]
+                SELECT {QuoteIdentifier("EmployeeId")}, CAST(SUM(COALESCE({QuoteIdentifier("Days")}, 0)) AS int)
+                FROM {QuoteIdentifier("LeaveRequests")}
+                WHERE {QuoteIdentifier("EmployeeId")} IN ({string.Join(",", parameters)})
+                GROUP BY {QuoteIdentifier("EmployeeId")}
                 """;
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -929,7 +945,7 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
                     reader.IsDBNull(1) ? 0 : Convert.ToInt32(reader.GetValue(1));
             }
         }
-        catch (SqlException)
+        catch (DbException)
         {
             return result;
         }
@@ -959,5 +975,25 @@ public class EmployeeAnalyticsService : IEmployeeAnalyticsService
         {
             return ValueTask.CompletedTask;
         }
+    }
+
+    private bool IsPostgres()
+    {
+        return _context.Database.IsNpgsql();
+    }
+
+    private string QuoteIdentifier(string identifier)
+    {
+        return IsPostgres()
+            ? "\"" + identifier.Replace("\"", "\"\"") + "\""
+            : "[" + identifier.Replace("]", "]]") + "]";
+    }
+
+    private string CastAsText(string column, int maxLength)
+    {
+        var quoted = QuoteIdentifier(column);
+        return IsPostgres()
+            ? $"CAST({quoted} AS text)"
+            : $"CAST({quoted} AS nvarchar({maxLength}))";
     }
 }

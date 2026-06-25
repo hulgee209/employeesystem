@@ -1,3 +1,9 @@
+databases:
+  - name: employeesystem-db
+    databaseName: employeesystem
+    user: employeesystem
+    plan: free
+
 services:
   - type: web
     name: employeesystem
@@ -10,5 +16,11 @@ services:
         value: Production
       - key: ApplyMigrations
         value: "true"
+      - key: DatabaseProvider
+        value: Postgres
+      - key: SeedDefaultUsers
+        value: "true"
       - key: ConnectionStrings__DefaultConnection
-        sync: false
+        fromDatabase:
+          name: employeesystem-db
+          property: connectionString

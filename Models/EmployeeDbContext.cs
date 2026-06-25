@@ -43,12 +43,29 @@ public partial class EmployeeDbContext : DbContext
     {
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseSqlServer("Server=localhost\\SQLEXPRESS;Database=EmployeeDB;Trusted_Connection=True;TrustServerCertificate=True;");
+            var databaseProvider = Environment.GetEnvironmentVariable("DatabaseProvider");
+            var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+
+            if (string.Equals(databaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(databaseProvider, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+            {
+                optionsBuilder.UseNpgsql(connectionString);
+            }
+            else
+            {
+                optionsBuilder.UseSqlServer(connectionString ??
+                    "Server=localhost\\SQLEXPRESS;Database=EmployeeDB;Trusted_Connection=True;TrustServerCertificate=True;");
+            }
         }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var isPostgres = Database.ProviderName?.Contains("Npgsql", StringComparison.OrdinalIgnoreCase) == true;
+        var moneyColumnType = isPostgres ? "numeric(18,2)" : "decimal(18,2)";
+        var netSalaryColumnType = isPostgres ? "numeric(20,2)" : "decimal(20,2)";
+        var longTextColumnType = isPostgres ? "text" : "nvarchar(max)";
+
         modelBuilder.Entity<Department>(entity =>
         {
             entity.HasKey(e => e.DepartmentId).HasName("PK__Departme__B2079BEDDF3646AE");
@@ -108,14 +125,14 @@ public partial class EmployeeDbContext : DbContext
                 .HasColumnName("PayMonth");
             entity.Property(e => e.BaseSalary)
                 .HasColumnName("Salary")
-                .HasColumnType("decimal(18,2)");
+                .HasColumnType(moneyColumnType);
             entity.Property(e => e.Bonus)
-                .HasColumnType("decimal(18,2)");
+                .HasColumnType(moneyColumnType);
             entity.Property(e => e.Deductions)
                 .HasColumnName("Deduction")
-                .HasColumnType("decimal(18,2)");
+                .HasColumnType(moneyColumnType);
             entity.Property(e => e.NetSalary)
-                .HasColumnType("decimal(20,2)");
+                .HasColumnType(netSalaryColumnType);
 
             entity.HasIndex(e => new { e.EmployeeId, e.PayrollMonth });
 
@@ -146,7 +163,7 @@ public partial class EmployeeDbContext : DbContext
 
             entity.HasIndex(e => e.Username).IsUnique();
             entity.HasIndex(e => e.EmployeeId).IsUnique()
-                .HasFilter("[EmployeeId] IS NOT NULL");
+                .HasFilter(isPostgres ? "\"EmployeeId\" IS NOT NULL" : "[EmployeeId] IS NOT NULL");
 
             entity.Property(e => e.Username).HasMaxLength(100);
             entity.Property(e => e.PasswordHash).HasMaxLength(500);
@@ -191,8 +208,8 @@ public partial class EmployeeDbContext : DbContext
             entity.Property(e => e.UserName).HasMaxLength(100);
             entity.Property(e => e.Action).HasMaxLength(20);
             entity.Property(e => e.TableName).HasMaxLength(100);
-            entity.Property(e => e.OldValues).HasColumnType("nvarchar(max)");
-            entity.Property(e => e.NewValues).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.OldValues).HasColumnType(longTextColumnType);
+            entity.Property(e => e.NewValues).HasColumnType(longTextColumnType);
             entity.Property(e => e.IpAddress).HasMaxLength(50);
         });
 
@@ -208,8 +225,8 @@ public partial class EmployeeDbContext : DbContext
         {
             entity.HasKey(e => e.MessageId);
             entity.Property(e => e.Role).HasMaxLength(20);
-            entity.Property(e => e.Content).HasColumnType("nvarchar(max)");
-            entity.Property(e => e.GeneratedSql).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.Content).HasColumnType(longTextColumnType);
+            entity.Property(e => e.GeneratedSql).HasColumnType(longTextColumnType);
             entity.HasIndex(e => new { e.SessionId, e.CreatedAt });
             entity.HasOne<ChatSession>().WithMany().HasForeignKey(e => e.SessionId).OnDelete(DeleteBehavior.Cascade);
         });

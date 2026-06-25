@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using EmployeeSystem.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using EmployeeSystem.Services;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,18 +47,28 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddAuthorization();
 
 builder.Services.AddDbContext<EmployeeDbContext>((sp, options) =>
-    options.UseSqlServer(
-            builder.Configuration.GetConnectionString("DefaultConnection"))
-        .AddInterceptors(sp.GetRequiredService<AuditInterceptor>()));
+{
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
+        builder.Configuration["DATABASE_URL"];
+    var databaseProvider = builder.Configuration["DatabaseProvider"];
+    var usePostgres = string.Equals(databaseProvider, "Postgres", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(databaseProvider, "PostgreSQL", StringComparison.OrdinalIgnoreCase);
+
+    if (usePostgres)
+    {
+        options.UseNpgsql(NormalizePostgresConnectionString(connectionString));
+    }
+    else
+    {
+        options.UseSqlServer(connectionString);
+    }
+
+    options.AddInterceptors(sp.GetRequiredService<AuditInterceptor>());
+});
 
 var app = builder.Build();
 
-if (app.Configuration.GetValue<bool>("ApplyMigrations"))
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<EmployeeDbContext>();
-    db.Database.Migrate();
-}
+await DatabaseInitializer.InitializeAsync(app.Services, app.Configuration);
 
 if (!app.Environment.IsDevelopment())
 {
@@ -78,3 +89,28 @@ app.MapControllerRoute(
     pattern: "{controller=Dashboard}/{action=Index}/{id?}");
 
 app.Run();
+
+static string? NormalizePostgresConnectionString(string? connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString) ||
+        (!connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase) &&
+         !connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase)))
+    {
+        return connectionString;
+    }
+
+    var uri = new Uri(connectionString);
+    var userInfo = uri.UserInfo.Split(':', 2);
+
+    var builder = new NpgsqlConnectionStringBuilder
+    {
+        Host = uri.Host,
+        Port = uri.Port > 0 ? uri.Port : 5432,
+        Username = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(0) ?? string.Empty),
+        Password = Uri.UnescapeDataString(userInfo.ElementAtOrDefault(1) ?? string.Empty),
+        Database = Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/')),
+        SslMode = SslMode.Require
+    };
+
+    return builder.ConnectionString;
+}
