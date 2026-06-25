@@ -239,7 +239,13 @@ public class AiSqlAgentService : IAiSqlAgentService
     {
         var normalized = question.Trim().ToLowerInvariant();
 
-        if (ContainsAny(normalized, "medeelel", "medeelliig", "buren", "info", "heltes", "department"))
+        var analyticsAnswer = await TryAnswerAnalyticsDirectlyAsync(normalized);
+        if (analyticsAnswer != null)
+        {
+            return analyticsAnswer;
+        }
+
+        if (ContainsAny(normalized, "medeelel", "medeelliig", "buren", "info", "heltes", "department", "mail", "email"))
         {
             var infoAnswer = await TryAnswerEmployeeInfoDirectlyAsync(normalized);
             if (infoAnswer != null)
@@ -316,6 +322,60 @@ public class AiSqlAgentService : IAiSqlAgentService
         return null;
     }
 
+    private async Task<AiSqlAgentResult?> TryAnswerAnalyticsDirectlyAsync(string normalized)
+    {
+        if (ContainsAny(normalized, "hotsrolt", "hotsrolttoi", "late") &&
+            ContainsAny(normalized, "heltes", "department"))
+        {
+            var row = await _context.Attendance
+                .AsNoTracking()
+                .Where(a => a.Status == "Late")
+                .Join(_context.Employees.AsNoTracking(), a => a.EmployeeId, e => e.EmployeeId, (a, e) => e)
+                .Join(_context.Departments.AsNoTracking(), e => e.DepartmentId, d => d.DepartmentId, (e, d) => d.DepartmentName)
+                .GroupBy(name => name)
+                .Select(g => new { DepartmentName = g.Key, LateCount = g.Count() })
+                .OrderByDescending(x => x.LateCount)
+                .FirstOrDefaultAsync();
+
+            if (row == null)
+            {
+                return new AiSqlAgentResult { Analysis = "Хоцролтын мэдээлэл олдсонгүй." };
+            }
+
+            return new AiSqlAgentResult
+            {
+                Analysis = $"{row.DepartmentName} хэлтэс хамгийн их хоцролттой байна. Нийт {row.LateCount:N0} удаагийн хоцролт бүртгэгдсэн."
+            };
+        }
+
+        if (ContainsAny(normalized, "dundaj", "average", "avg") &&
+            ContainsAny(normalized, "tsalin", "salary", "payroll") &&
+            ContainsAny(normalized, "heltes", "department"))
+        {
+            var rows = await _context.Payroll
+                .AsNoTracking()
+                .Where(p => p.NetSalary != null)
+                .Join(_context.Employees.AsNoTracking(), p => p.EmployeeId, e => e.EmployeeId, (p, e) => new { p.NetSalary, e.DepartmentId })
+                .Join(_context.Departments.AsNoTracking(), x => x.DepartmentId, d => d.DepartmentId, (x, d) => new { d.DepartmentName, x.NetSalary })
+                .GroupBy(x => x.DepartmentName)
+                .Select(g => new { DepartmentName = g.Key, AverageSalary = g.Average(x => x.NetSalary) })
+                .OrderBy(x => x.DepartmentName)
+                .ToListAsync();
+
+            if (rows.Count == 0)
+            {
+                return new AiSqlAgentResult { Analysis = "Цалингийн мэдээлэл олдсонгүй." };
+            }
+
+            return new AiSqlAgentResult
+            {
+                Analysis = string.Join("\n", rows.Select(x => $"{x.DepartmentName}: {x.AverageSalary:N0}"))
+            };
+        }
+
+        return null;
+    }
+
     private async Task<AiSqlAgentResult?> TryAnswerEmployeeInfoDirectlyAsync(string normalizedQuestion)
     {
         var tokens = ExtractEmployeeSearchTokens(normalizedQuestion);
@@ -348,6 +408,14 @@ public class AiSqlAgentService : IAiSqlAgentService
             return new AiSqlAgentResult
             {
                 Analysis = $"{employee.FirstName} {employee.LastName} нь {employee.Department.DepartmentName} хэлтэст ажилладаг."
+            };
+        }
+
+        if (ContainsAny(normalizedQuestion, "mail", "email"))
+        {
+            return new AiSqlAgentResult
+            {
+                Analysis = $"{employee.FirstName} {employee.LastName}: {employee.Email ?? "-"}"
             };
         }
 
@@ -424,14 +492,39 @@ public class AiSqlAgentService : IAiSqlAgentService
     {
         yield return employee.FirstName.ToLowerInvariant();
         yield return employee.LastName.ToLowerInvariant();
-        yield return TransliterateMongolian(employee.FirstName);
-        yield return TransliterateMongolian(employee.LastName);
+        foreach (var value in BuildLatinNameVariants(employee.FirstName))
+        {
+            yield return value;
+        }
+
+        foreach (var value in BuildLatinNameVariants(employee.LastName))
+        {
+            yield return value;
+        }
 
         if (!string.IsNullOrWhiteSpace(employee.Email))
             yield return employee.Email.ToLowerInvariant();
 
         if (!string.IsNullOrWhiteSpace(employee.Phone))
             yield return employee.Phone.ToLowerInvariant();
+    }
+
+    private static IEnumerable<string> BuildLatinNameVariants(string value)
+    {
+        var transliterated = TransliterateMongolian(value);
+        yield return transliterated;
+
+        var oVariant = transliterated.Replace("u", "o", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(oVariant, transliterated, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return oVariant;
+        }
+
+        var hVariant = transliterated.Replace("kh", "h", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(hVariant, transliterated, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return hVariant;
+        }
     }
 
     private static string NormalizeNameToken(string token)
@@ -447,6 +540,7 @@ public class AiSqlAgentService : IAiSqlAgentService
             }
         }
 
+        normalized = normalized.Replace("kh", "h", StringComparison.OrdinalIgnoreCase);
         return normalized;
     }
 
@@ -475,7 +569,8 @@ public class AiSqlAgentService : IAiSqlAgentService
         {
             "ямар", "дугаартай", "дугаар", "утас", "байна", "вэ", "yu", "yamar",
             "dugaartai", "dugaar", "utas", "baina", "be", "ve", "phone", "number", "giin",
-            "what", "is", "the", "of", "hi", "sain", "uu"
+            "mail", "email", "medeelel", "medeelliig", "buren", "info", "heltes", "heltesiin",
+            "heltesiinh", "department", "what", "is", "the", "of", "hi", "sain", "uu"
         };
 
         var search = normalizedQuestion;
@@ -498,11 +593,15 @@ public class AiSqlAgentService : IAiSqlAgentService
             Do not use SQL Server syntax. Use LIMIT instead of TOP. Use COALESCE instead of ISNULL.
             Never modify data.
             Understand Mongolian, English, and Mongolian Latin transliteration.
+            Always answer data questions by generating a SQL query. Do not answer from assumptions.
+            If resolved entity hints include an EmployeeId and the user asks about one person, filter by that exact EmployeeId.
+            Do not combine multiple employees only because FirstName or LastName partially matches the query.
             For person lookup questions, search "FirstName", "LastName", "Email", and "Phone" with ILIKE.
             For Latin transliteration names, use ILIKE against both name columns and email; do not require exact spelling.
             If the user asks for "full information", include employee name, department, position, phone, email, hire date, status, latest salary, attendance summary, and latest performance when possible.
             If the user asks about "most late department", group Attendance where Status='Late' by department and order by count descending.
-            If the user asks average salary by a department, join Payroll -> Employees -> Departments and average "NetSalary".
+            If the user asks average salary by department, join Payroll -> Employees -> Departments, group by department, and average "NetSalary".
+            If the user asks a person's email/mail, return "Email"; if phone/dugaar/utas, return "Phone".
 
             Available tables:
             "Employees"("EmployeeId","FirstName","LastName","DepartmentId","PositionId","Phone","Email","HireDate","IsActive","ManagerId")
@@ -521,6 +620,13 @@ public class AiSqlAgentService : IAiSqlAgentService
             "Attendance"."EmployeeId" = "Employees"."EmployeeId"
             "Payroll"."EmployeeId" = "Employees"."EmployeeId"
             "PerformanceReviews"."EmployeeId" = "Employees"."EmployeeId"
+
+            Column meanings:
+            "Payroll"."PayMonth" is the payroll month.
+            "Payroll"."Salary" is base salary.
+            "Payroll"."Deduction" is deductions.
+            "Payroll"."NetSalary" is the final net salary.
+            "Attendance"."Status" values include 'Present', 'Late', 'Absent', and 'Leave'.
 
             For broad lists, add LIMIT 100.
             """;
@@ -579,6 +685,7 @@ public class AiSqlAgentService : IAiSqlAgentService
             if (matches.Count > 0)
             {
                 hints.Add("Employee candidates:");
+                hints.Add($"Primary employee candidate: EmployeeId={matches[0].EmployeeId}. For a single-person question, use WHERE \"Employees\".\"EmployeeId\" = {matches[0].EmployeeId}.");
                 hints.AddRange(matches.Select(e =>
                     $"- EmployeeId={e.EmployeeId}, Name={e.FirstName} {e.LastName}, Department={e.Department.DepartmentName}, Position={e.Position.PositionName}, Phone={e.Phone ?? "-"}, Email={e.Email ?? "-"}"));
             }
