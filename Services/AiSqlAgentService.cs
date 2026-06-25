@@ -57,6 +57,12 @@ public class AiSqlAgentService : IAiSqlAgentService
 
         try
         {
+            var directAnswer = await TryAnswerDirectlyAsync(question);
+            if (directAnswer != null)
+            {
+                return directAnswer;
+            }
+
             var sql = await GenerateSqlFromAiAsync(question);
             ValidateSelectOnly(sql);
 
@@ -111,6 +117,107 @@ public class AiSqlAgentService : IAiSqlAgentService
                 Analysis = "Системд алдаа гарлаа. Админ руу мэдэгдэнэ үү."
             };
         }
+    }
+
+    private async Task<AiSqlAgentResult?> TryAnswerDirectlyAsync(string question)
+    {
+        var normalized = question.Trim().ToLowerInvariant();
+
+        if ((normalized.Contains("нийт") && normalized.Contains("ажилтан")) ||
+            normalized.Contains("heden ajiltan") ||
+            normalized.Contains("how many employee") ||
+            normalized.Contains("total employee"))
+        {
+            var count = await _context.Employees.AsNoTracking().CountAsync();
+            return new AiSqlAgentResult
+            {
+                Analysis = $"Нийт ажилтны тоо {count:N0} байна."
+            };
+        }
+
+        if (normalized.Contains("дугаар") ||
+            normalized.Contains("утас") ||
+            normalized.Contains("dugaar") ||
+            normalized.Contains("dugaartai") ||
+            normalized.Contains("utas") ||
+            normalized.Contains("phone"))
+        {
+            var search = ExtractEmployeeSearchText(normalized);
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                return null;
+            }
+
+            var tokens = search
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(token => token.Length >= 2)
+                .Take(4)
+                .ToArray();
+
+            if (tokens.Length == 0)
+            {
+                return null;
+            }
+
+            var allEmployees = await _context.Employees
+                .AsNoTracking()
+                .OrderBy(e => e.EmployeeId)
+                .Select(e => new
+                {
+                    e.FirstName,
+                    e.LastName,
+                    e.Phone,
+                    e.Email
+                })
+                .ToListAsync();
+            var employees = allEmployees
+                .Where(e => tokens.Any(token =>
+                    e.FirstName.ToLowerInvariant().Contains(token) ||
+                    e.LastName.ToLowerInvariant().Contains(token) ||
+                    (e.Email != null && e.Email.ToLowerInvariant().Contains(token)) ||
+                    (e.Phone != null && e.Phone.ToLowerInvariant().Contains(token))))
+                .Take(5)
+                .ToList();
+
+            if (employees.Count == 0)
+            {
+                return new AiSqlAgentResult
+                {
+                    Analysis = "Тийм нэртэй ажилтан олдсонгүй."
+                };
+            }
+
+            var lines = employees.Select(e =>
+            {
+                var phone = string.IsNullOrWhiteSpace(e.Phone) ? "утас бүртгэлгүй" : e.Phone;
+                return $"{e.FirstName} {e.LastName}: {phone}";
+            });
+
+            return new AiSqlAgentResult
+            {
+                Analysis = string.Join("\n", lines)
+            };
+        }
+
+        return null;
+    }
+
+    private static string ExtractEmployeeSearchText(string normalizedQuestion)
+    {
+        var stopWords = new[]
+        {
+            "ямар", "дугаартай", "дугаар", "утас", "байна", "вэ", "yu", "yamar",
+            "dugaartai", "dugaar", "utas", "baina", "be", "ve", "phone", "number",
+            "what", "is", "the", "of", "hi", "sain", "uu"
+        };
+
+        var search = normalizedQuestion;
+        foreach (var word in stopWords)
+        {
+            search = search.Replace(word, " ", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return string.Join(' ', search.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 
     private async Task<string> GenerateSqlFromAiAsync(string question)
