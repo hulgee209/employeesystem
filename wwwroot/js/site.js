@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const minimize =
         document.getElementById('aiWidgetMinimize');
 
+    const newChat =
+        document.getElementById('aiWidgetNewChat');
+
     const form =
         document.getElementById('aiWidgetForm');
 
@@ -65,28 +68,34 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    newChat?.addEventListener('click', function (event) {
+        event.stopPropagation();
+        startNewWidgetChat();
+    });
+
     // Close widget when clicking outside
     document.addEventListener('click', function (event) {
+        if (intro && intro.style.visibility !== 'hidden') {
+            intro.style.visibility = 'hidden';
+        }
+
         // Check if click is outside the panel and button
         if (!panel.contains(event.target) && !button.contains(event.target)) {
             panel.classList.remove('open');
         }
     });
 
-    introClose.addEventListener('click', function () {
+    introClose?.addEventListener('click', function (event) {
+        event.stopPropagation();
         intro.style.visibility = 'hidden';
     });
 
-    // Close widget when clicking on intro message - always clickable
+    // The intro bubble is only a hint; clicking it dismisses the hint.
     if (intro) {
         intro.style.cursor = 'pointer';
         intro.addEventListener('click', function (event) {
-            if (event.target === introClose) return; // Don't process if clicking X button
-            panel.classList.add('open');
+            event.stopPropagation();
             intro.style.visibility = 'hidden';
-            input.focus();
-            scrollWidgetToBottom();
-            loadChatHistory();
         });
     }
 
@@ -159,6 +168,31 @@ document.addEventListener('DOMContentLoaded', function () {
         if (intro) {
             intro.style.display = 'none';
         }
+    }
+
+    function startNewWidgetChat() {
+        setCurrentWidgetSession(null);
+        renderWidgetGreeting();
+        document.querySelectorAll('.ai-widget-history-item').forEach(item => item.classList.remove('active'));
+        input.value = '';
+        resizeWidgetInput();
+        input.focus();
+    }
+
+    function renderWidgetGreeting() {
+        messages.innerHTML = '';
+
+        const date =
+            document.createElement('div');
+
+        date.className =
+            'ai-widget-date';
+
+        date.textContent =
+            new Date().toLocaleDateString('mn-MN');
+
+        messages.appendChild(date);
+        appendWidgetMessage('ai', 'Сайн байна уу? HR мэдээлэлтэй холбоотой асуултаа бичнэ үү.');
     }
 
     function appendWidgetMessage(sender, text) {
