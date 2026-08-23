@@ -12,7 +12,13 @@ RUN dotnet publish ./EmployeeSystem.csproj -c Release -o /app/publish --no-resto
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-ENV ASPNETCORE_URLS=http://+:8080
+# Install native libraries required by some providers (Kerberos/GSSAPI)
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends libkrb5-3 ca-certificates \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Let Kestrel bind to the port Render provides via the PORT env var
+ENV ASPNETCORE_URLS=http://+:${PORT:-8080}
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 EXPOSE 8080
