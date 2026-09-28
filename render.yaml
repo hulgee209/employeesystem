@@ -3,6 +3,10 @@ databases:
     databaseName: employeesystem
     user: employeesystem
     plan: free
+  - name: employeesystem-db-new
+    databaseName: employeesystem
+    user: employeesystem
+    plan: free
 
 services:
   - type: web
@@ -44,5 +48,5 @@ services:
         value: meta-llama/llama-3.1-8b-instruct:free
       - key: ConnectionStrings__DefaultConnection
         fromDatabase:
-          name: employeesystem-db
+          name: employeesystem-db-new
           property: connectionString
