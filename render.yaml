@@ -1,8 +1,4 @@
 databases:
-  - name: employeesystem-db
-    databaseName: employeesystem
-    user: employeesystem
-    plan: free
   - name: employeesystem-db-new
     databaseName: employeesystem
     user: employeesystem
